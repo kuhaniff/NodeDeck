@@ -21,6 +21,7 @@ services:
       - /home/hermes:/home/hermes
       - ${STACKS_DIR:-/home/aneep/stacks}:/home/aneep/stacks
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/usr/share/phantom/data
       - ./static:/usr/share/phantom/static:ro
       - ./entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
     working_dir: /home/hermes

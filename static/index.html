@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>phantom</title>
-  <meta name="description" content="Phantom - Modern Minimalist Web Terminal">
+  <title>Phantom Terminal</title>
+  <meta name="description" content="Phantom - Termius-style Modern Web SSH Terminal & SFTP">
   <meta name="theme-color" content="#0f1115">
   <meta name="color-scheme" content="dark">
   <meta name="mobile-web-app-capable" content="yes">
@@ -26,14 +26,128 @@
 </head>
 <body>
   <div id="app">
-    <div id="tab-bar">
+    <!-- Top Tab Bar -->
+    <header id="tab-bar">
+      <button id="btn-toggle-sidebar" title="Toggle Sidebar (Alt+B)">☰</button>
       <div id="tabs-container"></div>
-      <button id="btn-new-tab" title="Tab Baru (Alt+T)">+</button>
+      
+      <div class="dropdown-wrapper">
+        <button id="btn-new-tab" title="Pilih Sambungan / Tab Baru">+</button>
+        <div id="host-dropdown" class="dropdown-menu"></div>
+      </div>
+
       <div id="tab-actions">
+        <button id="btn-quick-add-host" class="action-btn" title="Tambah Hos Baru">+ Host</button>
         <button id="pwa-install-btn" title="Pasang sebagai aplikasi PWA">Install</button>
       </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div id="app-body">
+      <!-- Collapsible Sidebar (Termius Style) -->
+      <aside id="sidebar">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar-nav">
+          <button class="nav-tab active" data-view="hosts">🖥️ Hosts</button>
+          <button class="nav-tab" data-view="files">📁 Files</button>
+        </div>
+
+        <!-- 1. Hosts View -->
+        <section id="view-hosts" class="sidebar-view active">
+          <div class="view-header">
+            <input type="text" id="host-search" placeholder="Cari sambungan...">
+          </div>
+          <div id="host-list" class="item-list"></div>
+          <div class="view-footer">
+            <button id="btn-add-host" class="btn-primary">+ Tambah Hos Baru</button>
+          </div>
+        </section>
+
+        <!-- 2. Files / SFTP Explorer View -->
+        <section id="view-files" class="sidebar-view">
+          <div class="fs-toolbar">
+            <button id="fs-btn-up" title="Folder Atas">⬆️</button>
+            <span id="fs-current-path" title="Current Path">/home/hermes</span>
+            <button id="fs-btn-refresh" title="Muat Semula">🔄</button>
+          </div>
+          <div class="fs-actions">
+            <button id="fs-btn-mkdir" class="fs-btn">📁+ Folder</button>
+            <label class="fs-btn fs-upload-label">
+              ⬆️ Upload
+              <input type="file" id="fs-file-input" multiple style="display:none">
+            </label>
+          </div>
+          <div id="file-list" class="item-list"></div>
+        </section>
+      </aside>
+
+      <!-- Terminal Area -->
+      <main id="terminal-container"></main>
     </div>
-    <div id="terminal-container"></div>
+  </div>
+
+  <!-- Modal: Add / Edit Host -->
+  <div id="modal-host" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-host-title">Tambah Sambungan Hos</h3>
+        <button class="modal-close" id="modal-host-close">&times;</button>
+      </div>
+      <form id="form-host" class="modal-body">
+        <input type="hidden" id="host-input-id">
+        <div class="form-group">
+          <label>Nama Paparan</label>
+          <input type="text" id="host-input-name" placeholder="cth: node02 (production)" required>
+        </div>
+        <div class="form-group">
+          <label>Jenis Sambungan</label>
+          <select id="host-input-type">
+            <option value="ssh">SSH (Remote / Tailscale)</option>
+            <option value="local">Local Shell</option>
+          </select>
+        </div>
+        <div class="form-group" id="group-host-address">
+          <label>Alamat Hos / IP</label>
+          <input type="text" id="host-input-address" placeholder="cth: 100.92.218.94 atau node02">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="host-input-user" placeholder="cth: aneep / hermes" required>
+          </div>
+          <div class="form-group" id="group-host-port">
+            <label>Port</label>
+            <input type="number" id="host-input-port" value="22">
+          </div>
+        </div>
+        <div class="form-group" id="group-host-auth">
+          <label>Jenis Autentikasi</label>
+          <select id="host-input-auth">
+            <option value="key">SSH Key (~/.ssh/id_ed25519)</option>
+            <option value="password">Kata Laluan (Interaktif)</option>
+            <option value="local">Tempatan (Local Drop Privileges)</option>
+          </select>
+        </div>
+        <div class="form-group" id="group-host-key">
+          <label>Laluan Fail SSH Key</label>
+          <input type="text" id="host-input-keypath" placeholder="/home/hermes/.ssh/id_ed25519">
+        </div>
+        <div class="form-group">
+          <label>Warna Badge</label>
+          <div class="color-picker-row">
+            <label><input type="radio" name="host-color" value="#7aa2f7" checked><span class="dot" style="background:#7aa2f7"></span></label>
+            <label><input type="radio" name="host-color" value="#e0af68"><span class="dot" style="background:#e0af68"></span></label>
+            <label><input type="radio" name="host-color" value="#9ece6a"><span class="dot" style="background:#9ece6a"></span></label>
+            <label><input type="radio" name="host-color" value="#f7768e"><span class="dot" style="background:#f7768e"></span></label>
+            <label><input type="radio" name="host-color" value="#bb9af7"><span class="dot" style="background:#bb9af7"></span></label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-cancel-host">Batal</button>
+          <button type="submit" class="btn-primary">Simpan Sambungan</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- Xterm and Addons -->
