@@ -31,6 +31,7 @@ if ! id -u aneep >/dev/null 2>&1; then
 else
     usermod -aG docker,sudo aneep 2>/dev/null || true
 fi
+mkdir -p /home/aneep && chown -R 1000:1000 /home/aneep 2>/dev/null || true
 
 # 4. Opt-in passwordless sudo (default enabled for smooth homelab terminal use)
 if [ "${ENABLE_SUDO}" = "true" ] || [ -z "${ENABLE_SUDO}" ]; then
