@@ -40,10 +40,30 @@ themes {
         }
         frame_selected {
             base 122 162 247
+            background 0
+            emphasis_0 247 118 142
+            emphasis_1 224 175 104
+            emphasis_2 122 162 247
+            emphasis_3 187 154 247
         }
         frame_unselected {
             base 42 51 80
+            background 0
+            emphasis_0 169 176 192
+            emphasis_1 42 51 80
+            emphasis_2 42 51 80
+            emphasis_3 42 51 80
         }
+    }
+}
+
+// Keybindings: Alt-based for browser safety (Ctrl+t and Ctrl+w are captured by Chrome)
+keybinds {
+    shared_except "locked" {
+        bind "Alt t" { NewTab; }
+        bind "Alt w" { CloseTab; }
+        bind "Alt Left" "Alt h" { GoToPreviousTab; }
+        bind "Alt Right" "Alt l" { GoToNextTab; }
     }
 }
 
