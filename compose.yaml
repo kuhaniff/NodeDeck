@@ -1,0 +1,26 @@
+services:
+  phantom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: phantom:latest
+    container_name: phantom
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - PUID=1001
+      - PGID=1001
+      - USER_NAME=hermes
+      - TERM=xterm-256color
+      - COLORTERM=truecolor
+    volumes:
+      - /home/hermes:/home/hermes
+      - /home/aneep/stacks:/home/aneep/stacks
+      - ./config/config.kdl:/etc/zellij/config.kdl:ro
+    working_dir: /home/hermes
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

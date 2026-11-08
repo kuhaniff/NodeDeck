@@ -1,0 +1,28 @@
+// Ghostty style compact tab-bar and theme for Zellij
+theme "ghostty"
+
+themes {
+    ghostty {
+        fg "#e0e0e0"
+        bg "#121212"
+        black "#1c1c1c"
+        red "#ff5555"
+        green "#50fa7b"
+        yellow "#f1fa8c"
+        blue "#bd93f9"
+        magenta "#ff79c6"
+        cyan "#8be9fd"
+        white "#f8f8f2"
+        orange "#ffb86c"
+    }
+}
+
+default_layout "default"
+mouse_mode true
+copy_on_select true
+copy_command "wl-copy"
+simplified_ui false
+pane_frames true
+auto_layout true
+session_serialization true
+serialize_pane_viewport true
