@@ -84,3 +84,4 @@ copy_on_select true
 // Sessions
 session_serialization true
 pane_viewport_serialization true
+default_shell "bash"
