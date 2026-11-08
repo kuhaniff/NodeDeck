@@ -8,7 +8,7 @@
     foreground: '#d8dce4',
     cursor: '#7aa2f7',
     cursorAccent: '#0f1115',
-    selectionBackground: 'rgba(122, 162, 247, 0.3)',
+    selectionBackground: 'rgba(122, 162, 247, 0.35)',
     black: '#15161e',
     red: '#f7768e',
     green: '#9ece6a',
@@ -36,13 +36,14 @@
   let activeTabId = null;
   let deferredPrompt = null;
 
-  // Ensure fonts are loaded before xterm measures cells
+  // Ensure fonts and Nerd Font symbols are loaded before xterm measures cells
   async function ensureFontLoaded() {
     try {
       if (document.fonts) {
         await Promise.all([
           document.fonts.load('400 14px "JetBrains Mono"'),
           document.fonts.load('700 14px "JetBrains Mono"'),
+          document.fonts.load('400 14px "Symbols Nerd Font Mono"'),
           document.fonts.ready
         ]);
       }
@@ -103,16 +104,20 @@
     panelEl.dataset.id = id;
     terminalContainer.appendChild(panelEl);
 
-    // Xterm instance
+    // Xterm instance with 10,000 line scrollback & Nerd Font support
     const term = new Terminal({
       theme: THEME,
-      fontFamily: "'JetBrains Mono', 'Fira Code', Cascadia Code, monospace",
+      fontFamily: "'JetBrains Mono', 'Symbols Nerd Font Mono', 'Cascadia Code', monospace",
       fontSize: 14,
       lineHeight: 1.25,
       cursorBlink: true,
       cursorStyle: 'block',
       allowProposedApi: true,
-      convertEol: true
+      convertEol: true,
+      scrollback: 10000,
+      scrollSensitivity: 1,
+      fastScrollSensitivity: 5,
+      rightClickSelectsWord: false
     });
 
     const fitAddon = new FitAddon.FitAddon();
@@ -120,7 +125,7 @@
 
     term.open(panelEl);
 
-    // Try WebGL addon for crisp GPU-accelerated rendering
+    // Try WebGL addon for crisp GPU rendering
     try {
       if (typeof WebglAddon !== 'undefined' && WebglAddon.WebglAddon) {
         const webgl = new WebglAddon.WebglAddon();
@@ -144,7 +149,7 @@
       }
     });
 
-    // Auto copy on selection
+    // Auto-copy on text selection (Windows Terminal style)
     term.onSelectionChange(() => {
       const selection = term.getSelection();
       if (selection && selection.length > 0) {
@@ -154,7 +159,6 @@
       }
     });
 
-    // Setup WebSocket connection
     const tabObj = {
       id,
       name: name || 'shell',
@@ -168,9 +172,91 @@
     };
     tabs.push(tabObj);
 
+    // --- Windows Terminal UX: Shortcuts & Mouse ---
+
+    // 1. Windows Terminal Key Handler:
+    // Ctrl+C: copy if selection exists, otherwise send SIGINT interrupt
+    // Ctrl+V: paste from clipboard
+    term.attachCustomKeyEventHandler((e) => {
+      // Ctrl+C
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
+        if (term.hasSelection()) {
+          const selection = term.getSelection();
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(selection).catch(() => {});
+          }
+          term.clearSelection();
+          return false; // Prevent sending SIGINT \x03
+        }
+        return true; // Send standard SIGINT interrupt
+      }
+
+      // Ctrl+V
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then((text) => {
+            if (text && tabObj.ws && tabObj.ws.readyState === WebSocket.OPEN) {
+              tabObj.ws.send(text);
+            }
+          }).catch((err) => {
+            console.warn('Clipboard paste failed:', err);
+          });
+        }
+        return false;
+      }
+
+      // Ctrl+Shift+C (Explicit copy)
+      if (e.ctrlKey && e.shiftKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
+        const selection = term.getSelection();
+        if (selection && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(selection).catch(() => {});
+        }
+        return false;
+      }
+
+      // Ctrl+Shift+V (Explicit paste)
+      if (e.ctrlKey && e.shiftKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then((text) => {
+            if (text && tabObj.ws && tabObj.ws.readyState === WebSocket.OPEN) {
+              tabObj.ws.send(text);
+            }
+          }).catch(() => {});
+        }
+        return false;
+      }
+
+      return true;
+    });
+
+    // 2. Windows Terminal Right-Click Behavior:
+    // If text is selected -> Copy selection and clear highlight
+    // If no text is selected -> Paste directly from clipboard!
+    panelEl.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      if (term.hasSelection()) {
+        const selection = term.getSelection();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(selection).catch(() => {});
+        }
+        term.clearSelection();
+      } else {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text && tabObj.ws && tabObj.ws.readyState === WebSocket.OPEN) {
+              tabObj.ws.send(text);
+            }
+          } catch (err) {
+            console.warn('Right-click paste access denied:', err);
+          }
+        }
+      }
+    });
+
     connectWs(tabObj);
 
-    // Events
+    // Tab Bar click
     tabEl.addEventListener('click', (e) => {
       if (e.target === closeEl) {
         closeTab(id);
@@ -179,7 +265,7 @@
       }
     });
 
-    // Rename on double-click
+    // Tab Rename on double-click
     tabEl.addEventListener('dblclick', (e) => {
       if (e.target === closeEl) return;
       const current = titleEl.textContent;

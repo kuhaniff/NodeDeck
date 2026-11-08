@@ -14,7 +14,7 @@ services:
       - PUID=${PUID:-1001}
       - PGID=${PGID:-1001}
       - USER_NAME=${USER_NAME:-hermes}
-      - ENABLE_SUDO=${ENABLE_SUDO:-false}
+      - ENABLE_SUDO=${ENABLE_SUDO:-true}
       - TERM=xterm-256color
       - COLORTERM=truecolor
     volumes:
@@ -22,6 +22,7 @@ services:
       - ${STACKS_DIR:-/home/aneep/stacks}:/home/aneep/stacks
       - /var/run/docker.sock:/var/run/docker.sock
       - ./static:/usr/share/phantom/static:ro
+      - ./entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
     working_dir: /home/hermes
     logging:
       driver: json-file

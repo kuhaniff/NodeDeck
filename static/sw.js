@@ -1,4 +1,4 @@
-const CACHE_NAME = 'phantom-cache-v1';
+const CACHE_NAME = 'phantom-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   '/vendor/xterm.css',
   '/vendor/addon-fit.js',
   '/vendor/addon-webgl.js',
+  '/vendor/SymbolsNerdFontMono-Regular.woff2',
   '/manifest.json',
   '/favicon.svg',
   '/icon-192.png',
