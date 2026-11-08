@@ -1,26 +1,27 @@
-// Phantom Terminal - Termius Style Frontend Logic
+// Phantom Terminal - Modern Termius / Warp Style Frontend Logic
 (function() {
   'use strict';
 
+  // Professional Slate / OLED Palette
   const THEME = {
-    background: '#0f1115',
+    background: '#0a0c10',
     foreground: '#d8dce4',
-    cursor: '#7aa2f7',
-    cursorAccent: '#0f1115',
-    selectionBackground: 'rgba(122, 162, 247, 0.35)',
+    cursor: '#3b82f6',
+    cursorAccent: '#0a0c10',
+    selectionBackground: 'rgba(59, 130, 246, 0.35)',
     black: '#15161e',
     red: '#f7768e',
-    green: '#9ece6a',
+    green: '#10b981',
     yellow: '#e0af68',
-    blue: '#7aa2f7',
+    blue: '#3b82f6',
     magenta: '#bb9af7',
     cyan: '#7dcfff',
     white: '#a9b1d6',
     brightBlack: '#414868',
     brightRed: '#f7768e',
-    brightGreen: '#9ece6a',
+    brightGreen: '#10b981',
     brightYellow: '#e0af68',
-    brightBlue: '#7aa2f7',
+    brightBlue: '#60a5fa',
     brightMagenta: '#bb9af7',
     brightCyan: '#7dcfff',
     brightWhite: '#c0caf5'
@@ -81,7 +82,69 @@
     }
   }
 
-  // --- 1. Hosts Management ---
+  // --- 1. Sidebar Collapse & Layout Control ---
+  function setSidebarOpen(open) {
+    if (open) {
+      sidebar.classList.remove('collapsed');
+      if (btnToggleSidebar) btnToggleSidebar.classList.add('active');
+    } else {
+      sidebar.classList.add('collapsed');
+      if (btnToggleSidebar) btnToggleSidebar.classList.remove('active');
+    }
+    try {
+      localStorage.setItem('phantom_sidebar_open', open ? 'true' : 'false');
+    } catch (e) {}
+
+    setTimeout(() => {
+      refitActiveTerminal();
+    }, 240);
+  }
+
+  function toggleSidebar() {
+    const isCurrentlyCollapsed = sidebar.classList.contains('collapsed');
+    setSidebarOpen(isCurrentlyCollapsed);
+  }
+
+  function initSidebar() {
+    let shouldOpen = true;
+    try {
+      const saved = localStorage.getItem('phantom_sidebar_open');
+      if (saved !== null) {
+        shouldOpen = (saved === 'true');
+      } else {
+        shouldOpen = (window.innerWidth >= 850);
+      }
+    } catch (e) {}
+
+    setSidebarOpen(shouldOpen);
+
+    if (btnToggleSidebar) {
+      btnToggleSidebar.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSidebar();
+      });
+    }
+  }
+
+  // Segmented Sidebar Navigation (Hosts vs SFTP Files)
+  navTabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navTabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const view = btn.dataset.view;
+      if (view === 'hosts') {
+        viewHosts.classList.add('active');
+        viewFiles.classList.remove('active');
+      } else {
+        viewHosts.classList.remove('active');
+        viewFiles.classList.add('active');
+        loadFiles(currentFsPath);
+      }
+    });
+  });
+
+  // --- 2. Hosts Management ---
   async function fetchHosts() {
     try {
       const res = await fetch('/api/hosts');
@@ -98,13 +161,21 @@
   function renderHostList(filter = '') {
     hostList.innerHTML = '';
     const filtered = savedHosts.filter(h => 
-      h.name.toLowerCase().includes(filter.toLowerCase()) || 
-      h.host.toLowerCase().includes(filter.toLowerCase()) ||
-      h.user.toLowerCase().includes(filter.toLowerCase())
+      (h.name || '').toLowerCase().includes(filter.toLowerCase()) || 
+      (h.host || '').toLowerCase().includes(filter.toLowerCase()) ||
+      (h.user || '').toLowerCase().includes(filter.toLowerCase())
     );
 
     if (filtered.length === 0) {
-      hostList.innerHTML = '<div style="padding:15px;text-align:center;color:#66738c;font-size:11px;">Tiada hos dijumpai</div>';
+      hostList.innerHTML = `
+        <div style="padding: 28px 12px; text-align: center; color: var(--text-dim); font-size: 12px;">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px; opacity:0.5;">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <div>Tiada sambungan dijumpai</div>
+        </div>
+      `;
       return;
     }
 
@@ -112,18 +183,26 @@
       const card = document.createElement('div');
       card.className = 'host-card';
       const meta = h.type === 'local' ? `Local Shell (${h.user})` : `${h.user}@${h.host}:${h.port || 22}`;
+      const color = h.color || '#3b82f6';
       
       card.innerHTML = `
-        <span class="host-dot" style="background:${h.color || '#7aa2f7'}"></span>
+        <span class="host-status-dot" style="background:${color}; color:${color}"></span>
         <div class="host-info">
           <div class="host-name">${escapeHtml(h.name)}</div>
           <div class="host-meta">${escapeHtml(meta)}</div>
         </div>
-        <button class="host-del" title="Padam Hos">&times;</button>
+        <div class="host-actions">
+          <button class="host-action-btn host-del" title="Padam Sambungan">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
       `;
 
       card.addEventListener('click', (e) => {
-        if (e.target.classList.contains('host-del')) {
+        if (e.target.closest('.host-del')) {
           e.stopPropagation();
           deleteHost(h.id);
         } else {
@@ -141,7 +220,7 @@
       const item = document.createElement('div');
       item.className = 'dropdown-item';
       item.innerHTML = `
-        <span class="tab-badge" style="background:${h.color || '#7aa2f7'}"></span>
+        <span class="tab-badge" style="background:${h.color || '#3b82f6'}"></span>
         <span>${escapeHtml(h.name)}</span>
       `;
       item.addEventListener('click', () => {
@@ -157,7 +236,13 @@
 
     const addOpt = document.createElement('div');
     addOpt.className = 'dropdown-item';
-    addOpt.innerHTML = `<span>➕ Tambah Sambungan...</span>`;
+    addOpt.innerHTML = `
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:2px;">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <span>Tambah Sambungan...</span>
+    `;
     addOpt.addEventListener('click', () => {
       hostDropdown.classList.remove('show');
       openAddHostModal();
@@ -184,7 +269,7 @@
   }
 
   function updateModalFormFields(type) {
-    const isLocal = type === 'local';
+    const isLocal = (type === 'local');
     document.getElementById('group-host-address').style.display = isLocal ? 'none' : 'block';
     document.getElementById('group-host-port').style.display = isLocal ? 'none' : 'block';
     document.getElementById('group-host-auth').style.display = isLocal ? 'none' : 'block';
@@ -198,19 +283,26 @@
   formHost.addEventListener('submit', async (e) => {
     e.preventDefault();
     const type = hostInputType.value;
-    const selectedColor = formHost.querySelector('input[name="host-color"]:checked')?.value || '#7aa2f7';
+    const name = document.getElementById('host-input-name').value.trim();
+    const address = document.getElementById('host-input-address').value.trim();
+    const user = document.getElementById('host-input-user').value.trim();
+    const port = parseInt(document.getElementById('host-input-port').value, 10) || 22;
+    const auth = document.getElementById('host-input-auth').value;
+    const keyPath = document.getElementById('host-input-keypath').value.trim();
+    const colorEl = document.querySelector('input[name="host-color"]:checked');
+    const color = colorEl ? colorEl.value : '#3b82f6';
+    const id = document.getElementById('host-input-id').value;
 
     const payload = {
-      id: document.getElementById('host-input-id').value || undefined,
-      name: document.getElementById('host-input-name').value.trim(),
-      type: type,
-      host: type === 'local' ? 'localhost' : document.getElementById('host-input-address').value.trim(),
-      user: document.getElementById('host-input-user').value.trim(),
-      port: type === 'local' ? 22 : parseInt(document.getElementById('host-input-port').value, 10) || 22,
-      auth: type === 'local' ? 'local' : document.getElementById('host-input-auth').value,
-      key_path: type === 'local' ? '' : document.getElementById('host-input-keypath').value.trim(),
-      color: selectedColor,
-      desc: type === 'local' ? `Local shell as ${document.getElementById('host-input-user').value}` : `SSH to ${document.getElementById('host-input-address').value}`
+      id: id || undefined,
+      name,
+      type,
+      host: type === 'local' ? 'localhost' : address,
+      port,
+      user,
+      auth,
+      key_path: keyPath,
+      color
     };
 
     try {
@@ -223,7 +315,7 @@
         modalHost.classList.remove('show');
         await fetchHosts();
       } else {
-        alert('Gagal menyimpan hos');
+        alert('Gagal simpan sambungan: ' + (await res.text()));
       }
     } catch (err) {
       alert('Ralat simpan hos: ' + err.message);
@@ -239,36 +331,48 @@
     renderHostList(e.target.value);
   });
 
-  // Toggle Dropdown for [+] Button
+  // Dropdown toggle (+)
   btnNewTab.addEventListener('click', (e) => {
     e.stopPropagation();
     hostDropdown.classList.toggle('show');
   });
 
-  document.addEventListener('click', () => {
-    hostDropdown.classList.remove('show');
+  window.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown-wrapper')) {
+      hostDropdown.classList.remove('show');
+    }
   });
 
-  // --- 2. Files / SFTP Explorer ---
+  // --- 3. SFTP / File Explorer ---
   async function loadFiles(path = '/home/hermes') {
-    fileList.innerHTML = '<div style="padding:15px;text-align:center;color:#66738c;font-size:11px;">Memuatkan fail...</div>';
     try {
       const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      currentFsPath = data.current;
-      currentFsParent = data.parent;
-      fsCurrentPath.textContent = data.current;
-      renderFileList(data.items);
+      if (res.ok) {
+        const data = await res.json();
+        currentFsPath = data.current_path;
+        currentFsParent = data.parent_path;
+        fsCurrentPath.textContent = currentFsPath;
+        fsCurrentPath.title = currentFsPath;
+        renderFiles(data.items);
+      } else {
+        alert('Gagal memuat fail: ' + (await res.text()));
+      }
     } catch (err) {
-      fileList.innerHTML = `<div style="padding:15px;color:#f7768e;font-size:11px;">Ralat: ${escapeHtml(err.message)}</div>`;
+      console.error('FS list error:', err);
     }
   }
 
-  function renderFileList(items) {
+  function renderFiles(items) {
     fileList.innerHTML = '';
     if (!items || items.length === 0) {
-      fileList.innerHTML = '<div style="padding:15px;text-align:center;color:#66738c;font-size:11px;">Folder ini kosong</div>';
+      fileList.innerHTML = `
+        <div style="padding: 28px 12px; text-align: center; color: var(--text-dim); font-size: 12px;">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px; opacity:0.5;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <div>Folder ini kosong</div>
+        </div>
+      `;
       return;
     }
 
@@ -281,22 +385,48 @@
     items.forEach(item => {
       const row = document.createElement('div');
       row.className = 'file-row';
-      const icon = item.is_dir ? '📁' : '📄';
-      const sizeStr = item.is_dir ? '' : formatBytes(item.size);
+      const isDir = item.is_dir;
+      const sizeStr = isDir ? '' : formatBytes(item.size);
+
+      const folderIcon = `
+        <svg class="file-icon folder" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      `;
+
+      const fileIcon = `
+        <svg class="file-icon file" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+      `;
 
       row.innerHTML = `
-        <span class="file-icon">${icon}</span>
+        ${isDir ? folderIcon : fileIcon}
         <span class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
         <span class="file-size">${sizeStr}</span>
-        ${!item.is_dir ? `<button class="file-action-btn btn-dl" title="Muat Turun Fail">⬇️</button>` : ''}
-        <button class="file-action-btn btn-del" title="Padam Fail">&times;</button>
+        ${!isDir ? `
+          <button class="file-action-btn btn-dl" title="Muat Turun Fail">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+        ` : ''}
+        <button class="file-action-btn btn-del" title="Padam Fail">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
       `;
 
       row.addEventListener('click', (e) => {
-        if (e.target.classList.contains('btn-dl')) {
+        if (e.target.closest('.btn-dl')) {
           e.stopPropagation();
           downloadFile(item.path);
-        } else if (e.target.classList.contains('btn-del')) {
+        } else if (e.target.closest('.btn-del')) {
           e.stopPropagation();
           deleteFile(item.path);
         } else if (item.is_dir) {
@@ -389,7 +519,7 @@
   // Drag & drop upload in files view
   viewFiles.addEventListener('dragover', (e) => {
     e.preventDefault();
-    viewFiles.style.borderColor = '#7aa2f7';
+    viewFiles.style.borderColor = '#3b82f6';
   });
 
   viewFiles.addEventListener('dragleave', () => {
@@ -404,39 +534,13 @@
     }
   });
 
-  // --- 3. Sidebar Navigation & Collapse ---
-  navTabs.forEach(btn => {
-    btn.addEventListener('click', () => {
-      navTabs.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const view = btn.dataset.view;
-      if (view === 'hosts') {
-        viewHosts.classList.add('active');
-        viewFiles.classList.remove('active');
-      } else {
-        viewHosts.classList.remove('active');
-        viewFiles.classList.add('active');
-        loadFiles(currentFsPath);
-      }
-    });
-  });
-
-  function toggleSidebar() {
-    sidebar.classList.toggle('collapsed');
-    setTimeout(() => {
-      refitActiveTerminal();
-    }, 220);
-  }
-
-  btnToggleSidebar.addEventListener('click', toggleSidebar);
-
   // --- 4. Terminal & Tab Management ---
   function openTabForHost(hostItem) {
     const newId = 'tab-' + Math.random().toString(36).substring(2, 8);
-    createTab(newId, hostItem.name, hostItem.id, hostItem.color || '#7aa2f7', true);
+    createTab(newId, hostItem.name, hostItem.id, hostItem.color || '#3b82f6', true);
   }
 
-  function createTab(id, name, hostId = 'node01-hermes', color = '#7aa2f7', activate = true) {
+  function createTab(id, name, hostId = 'node01-hermes', color = '#3b82f6', activate = true) {
     if (tabs.find(t => t.id === id)) return;
 
     // Tab DOM
@@ -468,12 +572,12 @@
     panelEl.dataset.id = id;
     terminalContainer.appendChild(panelEl);
 
-    // Xterm Instance
+    // Xterm Instance with Native Buffer & Scrollback
     const term = new Terminal({
       theme: THEME,
       fontFamily: "'JetBrainsMono Nerd Font', 'Cascadia Code', monospace",
       fontSize: 14,
-      lineHeight: 1.2,
+      lineHeight: 1.25,
       cursorBlink: true,
       cursorStyle: 'block',
       allowProposedApi: true,
@@ -497,7 +601,7 @@
         term.loadAddon(webgl);
       }
     } catch (e) {
-      console.warn('WebGL fallback to canvas:', e);
+      console.warn('WebGL fallback to standard canvas:', e);
     }
 
     // Auto-copy on text selection
@@ -525,7 +629,7 @@
     };
     tabs.push(tabObj);
 
-    // Windows Terminal Keyboard Handling
+    // Windows Terminal Keyboard & Selection Handling
     term.attachCustomKeyEventHandler((e) => {
       // Ctrl + C (copy if selected, else SIGINT)
       if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
@@ -552,7 +656,7 @@
         return false;
       }
 
-      // Ctrl + V or Ctrl + Shift + V (Paste via term.paste API)
+      // Ctrl + V or Ctrl + Shift + V (Native paste)
       if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) {
         if (e.type === 'keydown') {
           if (navigator.clipboard && navigator.clipboard.readText) {
@@ -567,13 +671,13 @@
       return true;
     });
 
-    // Right-Click (Paste / Copy)
+    // Right-click paste
     panelEl.addEventListener('contextmenu', async (e) => {
       e.preventDefault();
       if (term.hasSelection()) {
         const text = term.getSelection();
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(text).catch(() => {});
+          await navigator.clipboard.writeText(text);
         }
         term.clearSelection();
       } else {
@@ -652,7 +756,7 @@
 
     activeTabId = id;
     tabs.forEach(t => {
-      const isActive = t.id === id;
+      const isActive = (t.id === id);
       t.tabEl.classList.toggle('active', isActive);
       t.panelEl.classList.toggle('active', isActive);
     });
@@ -661,7 +765,7 @@
       tabObj.fitAddon.fit();
       sendResize(tabObj);
       tabObj.term.focus();
-    }, 10);
+    }, 15);
   }
 
   function closeTab(id, notifyBackend = true) {
@@ -696,15 +800,17 @@
   function refitActiveTerminal() {
     const active = tabs.find(t => t.id === activeTabId);
     if (active) {
-      active.fitAddon.fit();
-      sendResize(active);
+      try {
+        active.fitAddon.fit();
+        sendResize(active);
+      } catch (e) {}
     }
   }
 
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(refitActiveTerminal, 50);
+    resizeTimer = setTimeout(refitActiveTerminal, 60);
   });
 
   // Global Shortcuts
@@ -773,6 +879,7 @@
 
   // App Init
   async function init() {
+    initSidebar();
     await ensureFontLoaded();
     await fetchHosts();
 
@@ -780,7 +887,7 @@
     if (savedHosts.length > 0) {
       openTabForHost(savedHosts[0]);
     } else {
-      createTab('main', 'node01 (hermes)', 'node01-hermes', '#7aa2f7', true);
+      createTab('main', 'node01 (hermes)', 'node01-hermes', '#3b82f6', true);
     }
   }
 
