@@ -140,7 +140,9 @@ func main() {
 			}
 			_ = createCmd.Run()
 			_ = exec.Command("tmux", "set-option", "-t", sessionName, "status", "off").Run()
-			_ = exec.Command("tmux", "set-option", "-t", sessionName, "mouse", "on").Run()
+			// Mouse off so xterm.js handles native mouse scroll, selection and right-click paste
+			_ = exec.Command("tmux", "set-option", "-t", sessionName, "mouse", "off").Run()
+			_ = exec.Command("tmux", "set-option", "-t", sessionName, "history-limit", "10000").Run()
 			_ = exec.Command("tmux", "set-option", "-t", sessionName, "default-terminal", "xterm-256color").Run()
 		}
 

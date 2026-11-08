@@ -5,30 +5,75 @@ USER_ID=${PUID:-1001}
 GROUP_ID=${PGID:-1001}
 USERNAME=${USER_NAME:-hermes}
 
-# Create group if not exists
+# 1. Setup docker group (matching host GID 989 if mounted)
+if ! getent group docker >/dev/null; then
+    groupadd -g 989 docker 2>/dev/null || groupadd docker 2>/dev/null || true
+fi
+
+# 2. Setup hermes group and user
 if ! getent group "$USERNAME" >/dev/null; then
-    groupadd -g "$GROUP_ID" "$USERNAME" 2>/dev/null || groupadd "$USERNAME"
+    groupadd -g "$GROUP_ID" "$USERNAME" 2>/dev/null || groupadd "$USERNAME" 2>/dev/null || true
 fi
 
-# Create user if not exists
 if ! id -u "$USERNAME" >/dev/null 2>&1; then
-    useradd -u "$USER_ID" -g "$GROUP_ID" -s /bin/bash -m "$USERNAME"
+    useradd -u "$USER_ID" -g "$GROUP_ID" -G docker,sudo -s /bin/bash -m "$USERNAME" 2>/dev/null || true
+else
+    usermod -aG docker,sudo "$USERNAME" 2>/dev/null || true
 fi
 
-# Opt-in passwordless sudo
-if [ "${ENABLE_SUDO}" = "true" ]; then
-    echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/99-"$USERNAME"
-    chmod 0440 /etc/sudoers.d/99-"$USERNAME"
+# 3. Setup aneep user (UID 1000) for owner access
+if ! getent group aneep >/dev/null; then
+    groupadd -g 1000 aneep 2>/dev/null || groupadd aneep 2>/dev/null || true
+fi
+
+if ! id -u aneep >/dev/null 2>&1; then
+    useradd -u 1000 -g 1000 -G docker,sudo -s /bin/bash -m -d /home/aneep aneep 2>/dev/null || true
 else
-    rm -f /etc/sudoers.d/99-"$USERNAME"
+    usermod -aG docker,sudo aneep 2>/dev/null || true
+fi
+
+# 4. Opt-in passwordless sudo (default enabled for smooth homelab terminal use)
+if [ "${ENABLE_SUDO}" = "true" ] || [ -z "${ENABLE_SUDO}" ]; then
+    echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/99-all-nopasswd
+    chmod 0440 /etc/sudoers.d/99-all-nopasswd
+else
+    rm -f /etc/sudoers.d/99-all-nopasswd
+fi
+
+# Fix sudo audit/coredump noise in containers
+if ! grep -q "disable_coredump" /etc/sudo.conf 2>/dev/null; then
+    echo 'Set disable_coredump false' >> /etc/sudo.conf
 fi
 
 export HOME="/home/$USERNAME"
 cd "$HOME"
 
-# Ensure starship prompt is enabled in interactive bash shells
+# Ensure starship prompt and ergonomic helpers in interactive bash shells
 if ! grep -q "starship init bash" /etc/bash.bashrc 2>/dev/null; then
     echo 'eval "$(starship init bash)"' >> /etc/bash.bashrc
+fi
+
+if ! grep -q "sudo()" /etc/bash.bashrc 2>/dev/null; then
+cat << 'BASHRC' >> /etc/bash.bashrc
+
+# Sudo & user switching ergonomics
+sudo() {
+  if [ "$1" = "-ui" ]; then
+    shift
+    local target="$1"
+    shift
+    command sudo -u "$target" -i "$@"
+  elif [ "$1" = "-iu" ]; then
+    shift
+    local target="$1"
+    shift
+    command sudo -u "$target" -i "$@"
+  else
+    command sudo "$@"
+  fi
+}
+alias su='sudo su'
+BASHRC
 fi
 
 # Provide phantom-help CLI command
@@ -49,14 +94,14 @@ cat << 'TXT'
    Alt + 1 .. Alt + 9    : Lompat terus ke Tab 1 hingga Tab 9
    Alt + Left / Right    : Pergi ke tab sebelumnya / seterusnya
 
- [PENGURUSAN SESI]
-   Sesi terminal kekal hidup di latar belakang menggunakan tmux.
-   Bila anda refresh atau buka semula browser, semua tab akan
-   reconnect secara automatik ke sesi kerja yang sama.
-
- [TETIKUS & PAPAN KERAT]
-   Pilih / highlight teks: Salin automatik ke papan keratan (Clipboard)
-   Ctrl + Shift + V      : Tampal (Paste) teks dari papan keratan
+ [TETIKUS & PAPAN KERAT (WINDOWS TERMINAL STYLE)]
+   Pilih / drag tetikus  : Highlight & salin automatik ke Clipboard
+   Klik-Kanan            : Tampal (Paste) jika tiada teks dipilih,
+                           atau Salin (Copy) jika ada pilihan teks
+   Ctrl + C              : Salin pilihan (jika teks dipilih),
+                           atau hantar interrupt SIGINT (jika tiada teks)
+   Ctrl + V              : Tampal (Paste) dari papan keratan
+   Roda Tetikus (Scroll) : Skrol lancar ke atas / bawah (10,000 baris)
 
  [PWA (PROGRESSIVE WEB APP)]
    Klik butang 'Install' di bahagian kanan tab bar untuk memasang
@@ -73,12 +118,25 @@ ln -sf /usr/local/bin/phantom-help /usr/local/bin/-help
 ln -sf /usr/local/bin/phantom-help /usr/local/bin/--help
 ln -sf /usr/local/bin/phantom-help /usr/local/bin/help-phantom
 
-# Profile aliases
+# Profile aliases & ergonomics
 cat << 'PROFILEEOF' > /etc/profile.d/phantom.sh
 alias phantom='phantom-help'
 alias help-phantom='phantom-help'
 alias -- -help='phantom-help'
 alias -- --help='phantom-help'
+alias su='sudo su'
+
+sudo() {
+  if [ "$1" = "-ui" ]; then
+    shift
+    command sudo -u "$1" -i "${@:2}"
+  elif [ "$1" = "-iu" ]; then
+    shift
+    command sudo -u "$1" -i "${@:2}"
+  else
+    command sudo "$@"
+  fi
+}
 PROFILEEOF
 
 exec gosu "$USERNAME" /usr/local/bin/phantom-server -port 8090 -static /usr/share/phantom/static
