@@ -26,11 +26,10 @@ fi
 export HOME="/home/$USERNAME"
 cd "$HOME"
 
-# Zellij default setup
-mkdir -p "$HOME/.config/zellij/layouts"
-cp -f /etc/zellij/config.kdl "$HOME/.config/zellij/config.kdl" 2>/dev/null || true
-cp -rf /etc/zellij/layouts/* "$HOME/.config/zellij/layouts/" 2>/dev/null || true
-chown -R "$USER_ID:$GROUP_ID" "$HOME/.config/zellij" 2>/dev/null || true
+# Ensure starship prompt is enabled in interactive bash shells
+if ! grep -q "starship init bash" /etc/bash.bashrc 2>/dev/null; then
+    echo 'eval "$(starship init bash)"' >> /etc/bash.bashrc
+fi
 
 # Provide phantom-help CLI command
 cat << 'HELPEOF' > /usr/local/bin/phantom-help
@@ -38,35 +37,43 @@ cat << 'HELPEOF' > /usr/local/bin/phantom-help
 cat << 'TXT'
 
 ========================================================================
-                   PHANTOM WEB TERMINAL - QUICK HELP
+                   PHANTOM WEB TERMINAL - PANDUAN PANTAS
 ========================================================================
 
- [TABS & SESSIONS]
-   Alt + t             : Cipta tab baru (New Tab)
-   Alt + w             : Tutup tab aktif (Close Tab)
-   Alt + Left / Alt + h: Pindah ke tab sebelumnya (Previous Tab)
-   Alt + Right / Alt + l: Pindah ke tab seterusnya (Next Tab)
+ [TABS & SESI]
+   Klik [+]              : Cipta tab baru (atau tekan Alt + T)
+   Klik (x) pada tab     : Tutup tab tersebut (atau tekan Alt + W)
+   Klik tab              : Pilih / tukar tab aktif
+   Dwi-klik tajuk tab    : Namakan semula tab (Rename tab)
+   Taip 'exit' / Ctrl+D  : Keluar shell dan tutup tab secara automatik
+   Alt + 1 .. Alt + 9    : Lompat terus ke Tab 1 hingga Tab 9
+   Alt + Left / Right    : Pergi ke tab sebelumnya / seterusnya
 
- [PANES (SPLIT SCREEN)]
-   Alt + n             : Buka split pane baru (New Pane)
-   Alt + f             : Buka / toggle floating terminal window
-   Ctrl + p            : Masuk ke mod Pane (tekan 'd' untuk split bawah, 'r' split kanan)
+ [PENGURUSAN SESI]
+   Sesi terminal kekal hidup di latar belakang menggunakan tmux.
+   Bila anda refresh atau buka semula browser, semua tab akan
+   reconnect secara automatik ke sesi kerja yang sama.
 
- [TETIKUS / MOUSE]
-   Klik tab atas       : Pilih tab
-   Klik butang [+]     : Tambah tab baru
-   Klik-Kanan pada tab : Buka menu kontekstual (Rename / Close Tab)
-   Highlight teks      : Salin ke clipboard secara automatik (OSC 52)
+ [TETIKUS & PAPAN KERAT]
+   Pilih / highlight teks: Salin automatik ke papan keratan (Clipboard)
+   Ctrl + Shift + V      : Tampal (Paste) teks dari papan keratan
 
- [PWA / STANDALONE APP]
-   Pasang sebagai desktop / mobile app melalui butang install di browser bar!
+ [PWA (PROGRESSIVE WEB APP)]
+   Klik butang 'Install' di bahagian kanan tab bar untuk memasang
+   Phantom sebagai aplikasi desktop / telefon mudah alih yang berasingan.
 
 ========================================================================
 TXT
 HELPEOF
 chmod +x /usr/local/bin/phantom-help
 
-# Alias --help to phantom-help for convenience
+# Create symlinks for all help command variants
+ln -sf /usr/local/bin/phantom-help /usr/local/bin/phantom
+ln -sf /usr/local/bin/phantom-help /usr/local/bin/-help
+ln -sf /usr/local/bin/phantom-help /usr/local/bin/--help
+ln -sf /usr/local/bin/phantom-help /usr/local/bin/help-phantom
+
+# Profile aliases
 cat << 'PROFILEEOF' > /etc/profile.d/phantom.sh
 alias phantom='phantom-help'
 alias help-phantom='phantom-help'
@@ -74,25 +81,4 @@ alias -- -help='phantom-help'
 alias -- --help='phantom-help'
 PROFILEEOF
 
-# Assemble ttyd options
-TTYD_ARGS=(
-    --port 8090
-    --writable
-    -I /usr/share/ttyd/index.html
-    -O
-    -P 30
-    -t rendererType=webgl
-    -t disableLeaveAlert=true
-    -t fontSize=15
-    -t fontFamily="'JetBrains Mono', 'Geist Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace"
-    -t titleFixed=phantom
-    -t disableResizeOverlay=true
-    -t macOptionIsMeta=true
-    -t 'theme={"background": "#0f1115", "foreground": "#d8dce4", "cursor": "#7aa2f7", "cursorAccent": "#0f1115", "selectionBackground": "#2a3350", "black": "#1a1d23", "red": "#f7768e", "green": "#9ece6a", "yellow": "#e0af68", "blue": "#7aa2f7", "magenta": "#bb9af7", "cyan": "#7dcfff", "white": "#c5cad6", "brightBlack": "#7a8299", "brightRed": "#ff8fa3", "brightGreen": "#b4e07f", "brightYellow": "#f0c27e", "brightBlue": "#94b8ff", "brightMagenta": "#cdb0ff", "brightCyan": "#9be0ff", "brightWhite": "#ffffff"}'
-)
-
-if [ -n "$TTYD_USER" ] && [ -n "$TTYD_PASS" ]; then
-    TTYD_ARGS+=(-c "$TTYD_USER:$TTYD_PASS")
-fi
-
-exec gosu "$USERNAME" ttyd "${TTYD_ARGS[@]}" zellij attach --create phantom
+exec gosu "$USERNAME" /usr/local/bin/phantom-server -port 8090 -static /usr/share/phantom/static

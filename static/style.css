@@ -1,0 +1,230 @@
+:root {
+  --bg-color: #0f1115;
+  --tab-bar-bg: #13161c;
+  --tab-active-bg: #1e222b;
+  --tab-active-border: #7aa2f7;
+  --tab-hover-bg: #181c24;
+  --tab-text: #9aa5b8;
+  --tab-text-active: #f0f4fc;
+  --accent-color: #7aa2f7;
+  --close-hover-bg: #f7768e22;
+  --close-hover-color: #f7768e;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  color: var(--tab-text-active);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Tab Bar --- */
+#tab-bar {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  background-color: var(--tab-bar-bg);
+  border-bottom: 1px solid #1c202a;
+  padding: 0 6px;
+  gap: 4px;
+  z-index: 10;
+}
+
+#tabs-container {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: calc(100% - 120px);
+  height: 100%;
+  scrollbar-width: none;
+}
+
+#tabs-container::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 26px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--tab-text);
+  background-color: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+  border: 1px solid transparent;
+  transition: all 0.12s ease;
+}
+
+.tab:hover {
+  background-color: var(--tab-hover-bg);
+  color: #c0caf5;
+}
+
+.tab.active {
+  background-color: var(--tab-active-bg);
+  color: var(--tab-text-active);
+  font-weight: 500;
+  border-color: #293040;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--tab-text);
+  transition: all 0.12s ease;
+}
+
+.tab-close:hover {
+  background-color: var(--close-hover-bg);
+  color: var(--close-hover-color);
+}
+
+/* New tab button */
+#btn-new-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: none;
+  background-color: transparent;
+  color: var(--tab-text);
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+#btn-new-tab:hover {
+  background-color: var(--tab-hover-bg);
+  color: var(--accent-color);
+}
+
+/* Right tools */
+#tab-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--tab-text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.12s ease;
+}
+
+.action-btn:hover {
+  background-color: var(--tab-hover-bg);
+  color: #fff;
+}
+
+#pwa-install-btn {
+  display: none;
+  padding: 0 8px;
+  width: auto;
+  font-size: 11px;
+  font-weight: 500;
+  background-color: #1e2430;
+  color: var(--accent-color);
+  border: 1px solid #293040;
+}
+
+#pwa-install-btn:hover {
+  background-color: #262e3d;
+}
+
+/* --- Terminal Panels --- */
+#terminal-container {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 34px);
+  background-color: var(--bg-color);
+}
+
+.terminal-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  background-color: var(--bg-color);
+}
+
+.terminal-panel.active {
+  display: block;
+}
+
+.terminal-panel .xterm {
+  height: 100%;
+  padding: 4px 6px;
+}
+
+/* Slim modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #252b38;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #363e52;
+}

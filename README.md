@@ -1,17 +1,18 @@
 # Phantom
 
-> **Ghostty-style high-performance web terminal stack** powered by [ttyd](https://github.com/tsl0922/ttyd) and [Zellij](https://zellij.dev/).
+> **Ghostty-style minimalist web terminal stack** powered by Go, [xterm.js](https://xtermjs.org/), and [tmux](https://github.com/tmux/tmux).
 
 ---
 
 ## ✨ Features
 
-- **⚡ Zero-Lag Input:** C-based `ttyd` (libwebsockets) direct PTY engine.
-- **🎨 Ghostty Dark Aesthetic:** Custom ANSI & component color palette, block cursor, and modern flat dark backdrop (`#0f1115`).
-- **🚀 WebGL Accelerated:** Hardware-accelerated rendering powered by browser GPU with loaded font re-measurement.
-- **🪟 Multiplexer (Zellij):** Thin tab bar on top, flat tabs without powerline arrows, split panes, floating terminals, and mouse-clickable navigation.
-- **🔄 Session Resilience:** Automatic session persistence. Reconnecting or restarting the container preserves all open tabs and running processes.
-- **🔒 Hardened Security:** Loopback bind by default, opt-in sudo, WebSocket origin checking (`-O`), ping interval (`-P 30`), and optional basic authentication.
+- **⚡ Lightweight Micro-Stack:** Single Go binary (`creack/pty` + `gorilla/websocket`) serving static assets and managing PTY sessions.
+- **🎨 Ghostty Dark Aesthetic:** Clean flat dark backdrop (`#0f1115`), thin tab bar on top, blue accent highlights, and JetBrains Mono monospace typography.
+- **📑 Full Tab Control:** Dedicated `[+]` button to open tabs and explicit `(x)` button on each tab to close with mouse. Double-click tab to rename.
+- **🚀 Native Starship Prompt:** Full interactive Bash login shell with Starship prompt (`hermes@node01 ~`) showing exact working directory and Git status.
+- **📱 PWA (Progressive Web App):** Installable standalone desktop / mobile app with offline shell, custom icons, and web app manifest.
+- **🔄 Headless Session Persistence:** Each tab connects to a dedicated headless `tmux` session with status bar hidden (`status off`). Reconnecting or refreshing the browser restores running sessions automatically.
+- **📖 Built-in Help:** Type `phantom`, `-help`, `--help`, or `help-phantom` directly in the terminal for quick keyboard shortcuts and features guide.
 
 ---
 
@@ -38,6 +39,7 @@ Open your browser and navigate to:
 ```
 http://127.0.0.1:8090
 ```
+Or your configured Cloudflare Access / reverse proxy domain.
 
 ---
 
@@ -47,7 +49,6 @@ http://127.0.0.1:8090
 > Never expose Phantom directly to the public internet without authentication and TLS.
 
 - **Localhost Bound by Default:** Published on `127.0.0.1:8090` to prevent unintended LAN/WAN exposure.
-- **Basic Auth:** Set `TTYD_USER` and `TTYD_PASS` in your `.env` file to require credentials before accessing the shell.
 - **Reverse Proxy / Cloudflare Tunnel:** When exposing remotely, route through an HTTPS reverse proxy or Cloudflare Access tunnel with origin checking.
 - **Opt-in Sudo:** Container runs unprivileged by default; passwordless sudo is disabled unless explicitly enabled via `ENABLE_SUDO=true`.
 
@@ -64,26 +65,23 @@ http://127.0.0.1:8090
 | `USER_NAME` | `hermes` | Shell username |
 | `ENABLE_SUDO` | `false` | Enable passwordless sudo for user |
 | `STACKS_DIR` | `/home/aneep/stacks` | Host directory mounted to `/home/aneep/stacks` |
-| `TTYD_USER` | *(empty)* | Username for HTTP basic auth |
-| `TTYD_PASS` | *(empty)* | Password for HTTP basic auth |
 
 ---
 
-## ⌨️ Browser-Safe Keybindings
+## ⌨️ Shortcuts & Controls
 
-In web browsers, standard shortcuts like `Ctrl+t` and `Ctrl+w` are captured by the browser to open/close browser tabs. Phantom configures dedicated **Alt-based** shortcuts:
-
-| Action | Shortcut |
+| Action | Control / Shortcut |
 | :--- | :--- |
-| **New Tab** | `Alt` + `t` |
-| **Close Tab** | `Alt` + `w` |
-| **Next Tab** | `Alt` + `Right` or `Alt` + `l` |
-| **Previous Tab** | `Alt` + `Left` or `Alt` + `h` |
-| **New Pane** | `Alt` + `n` |
-| **Toggle Floating Pane** | `Alt` + `f` |
-| **Switch Mode** | `Ctrl` + `p` (Pane), `Ctrl` + `o` (Session), `Ctrl` + `g` (Locked) |
-
-*Note for macOS users:* `macOptionIsMeta=true` is enabled in `ttyd` so the `Option` (⌥) key functions as `Alt`/`Meta`.
+| **New Tab** | Klik butang `[+]` atau tekan `Alt` + `t` |
+| **Close Tab** | Klik butang `(x)` pada tab atau tekan `Alt` + `w` |
+| **Close Shell** | Taip `exit` atau tekan `Ctrl` + `d` |
+| **Rename Tab** | Dwi-klik pada tajuk tab |
+| **Switch Tab** | Klik tab atau `Alt` + `1` .. `Alt` + `9` |
+| **Next / Prev Tab** | `Alt` + `Right` / `Alt` + `Left` |
+| **Copy Text** | Pilih / highlight teks (automatik salin ke papan keratan) |
+| **Paste Text** | `Ctrl` + `Shift` + `v` |
+| **Install PWA** | Klik butang `Install` di sebelah kanan tab bar |
+| **CLI Help** | Taip `phantom` atau `-help` dalam terminal |
 
 ---
 
@@ -91,24 +89,24 @@ In web browsers, standard shortcuts like `Ctrl+t` and `Ctrl+w` are captured by t
 
 ```
 phantom/
-├── Dockerfile              # Debian-slim + ttyd + Zellij (musl)
-├── compose.yaml            # Service definition, init process, and volume mounts
-├── entrypoint.sh           # User mapping, security hardening, and ttyd startup
-├── .env.example            # Sample configuration values
-├── config/
-│   ├── config.kdl          # Zellij Ghostty-theme & Alt-keybind configuration
-│   └── layouts/
-│       └── phantom.kdl     # Layout template: single thin top tab-bar, borderless
-├── web/
-│   └── index.html          # Customized ttyd bundle with Google Fonts & font re-measurement
+├── Dockerfile              # Multi-stage build (Go builder + minimal Debian 13 runtime)
+├── compose.yaml            # Docker Compose service definition
+├── entrypoint.sh           # User permissions and container entrypoint
+├── main.go                 # Go WebSocket server + PTY bridge
+├── go.mod / go.sum         # Go dependencies (creack/pty, gorilla/websocket)
+├── static/                 # Static web assets
+│   ├── index.html          # Web terminal UI
+│   ├── style.css           # Ghostty dark styling & tab bar
+│   ├── app.js              # Tab management & xterm.js orchestration
+│   ├── manifest.json       # PWA manifest
+│   ├── sw.js               # PWA service worker
+│   ├── favicon.svg         # App SVG icon
+│   ├── icon-192.png        # PWA 192px icon
+│   ├── icon-512.png        # PWA 512px icon
+│   └── vendor/             # Vendored xterm.js & addons
 ├── LICENSE                 # MIT License
 └── README.md
 ```
-
-### Maintenance Note: Regenerating `web/index.html`
-`web/index.html` is patched from stock `ttyd 1.7.7`. If upgrading `ttyd`:
-1. Fetch the stock page from the new ttyd container: `curl -s http://localhost:8090/ > web/index.html`
-2. Re-apply the Google Fonts `<link>` (JetBrains Mono 400;700), slim scrollbar styles, and the `document.fonts.load` re-measurement `<script>` before `</body>`.
 
 ---
 

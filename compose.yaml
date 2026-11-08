@@ -1,5 +1,6 @@
 services:
   phantom:
+    hostname: node01
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,16 +15,13 @@ services:
       - PGID=${PGID:-1001}
       - USER_NAME=${USER_NAME:-hermes}
       - ENABLE_SUDO=${ENABLE_SUDO:-false}
-      - TTYD_USER=${TTYD_USER:-}
-      - TTYD_PASS=${TTYD_PASS:-}
       - TERM=xterm-256color
       - COLORTERM=truecolor
     volumes:
       - /home/hermes:/home/hermes
       - ${STACKS_DIR:-/home/aneep/stacks}:/home/aneep/stacks
-      - ./config/config.kdl:/etc/zellij/config.kdl:ro
-      - ./config/layouts:/etc/zellij/layouts:ro
-      - ./web/index.html:/usr/share/ttyd/index.html:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./static:/usr/share/phantom/static:ro
     working_dir: /home/hermes
     logging:
       driver: json-file
