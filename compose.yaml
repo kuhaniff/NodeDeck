@@ -18,6 +18,7 @@ services:
       - /home/hermes:/home/hermes
       - /home/aneep/stacks:/home/aneep/stacks
       - ./config/config.kdl:/etc/zellij/config.kdl:ro
+      - ./config/layouts:/etc/zellij/layouts:ro
     working_dir: /home/hermes
     logging:
       driver: json-file
