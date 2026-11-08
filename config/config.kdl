@@ -1,8 +1,8 @@
-// Phantom Theme & Layout for Zellij (Ghostty Style)
-theme "phantom"
+// Phantom Ghostty Theme & Config
+theme "ghostty"
 
 themes {
-    phantom {
+    ghostty {
         fg "#e0e0e0"
         bg "#121212"
         black "#1c1c1c"
@@ -17,21 +17,21 @@ themes {
     }
 }
 
-// Matikan pop-up Release Notes yang mengganggu di tengah skrin
+// Matikan pop-up tips & release notes mengganggu
+show_startup_tips false
 show_release_notes false
 
-// Layout bersih ala Ghostty (borderless panes)
+// Ghostty style: Borderless, simple tab bar & status
 default_layout "phantom"
 pane_frames false
 simplified_ui false
 
-// Tetapan Interaksi & Tetikus
+// Tetikus & Interaksi
 mouse_mode true
 copy_on_select true
 copy_command "wl-copy"
-session_name "phantom"
 
-// Performance & Auto Layout
+// Performance
 auto_layout true
 session_serialization true
 serialize_pane_viewport true

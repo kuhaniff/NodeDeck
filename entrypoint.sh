@@ -22,19 +22,20 @@ chmod 0440 /etc/sudoers.d/99-"$USERNAME"
 export HOME="/home/$USERNAME"
 cd "$HOME"
 
-# Zellij default setup if config missing
+# Zellij default setup
 mkdir -p "$HOME/.config/zellij/layouts"
 cp -f /etc/zellij/config.kdl "$HOME/.config/zellij/config.kdl" 2>/dev/null || true
 cp -rf /etc/zellij/layouts/* "$HOME/.config/zellij/layouts/" 2>/dev/null || true
 chown -R "$USER_ID:$GROUP_ID" "$HOME/.config/zellij" 2>/dev/null || true
 
-# Kill any stale zellij sessions on fresh container boot if needed
-gosu "$USERNAME" zellij delete-all -y 2>/dev/null || true
+# Kill old sessions
+gosu "$USERNAME" zellij delete-all-sessions -y 2>/dev/null || true
 
-# Launch ttyd with WebGL, Ghostty theme, custom title, JetBrains Mono font
+# Launch ttyd with custom index.html (Nerd fonts + styling)
 exec gosu "$USERNAME" ttyd \
     --port 8090 \
     --writable \
+    -I /usr/share/ttyd/index.html \
     -t rendererType=webgl \
     -t disableLeaveAlert=true \
     -t fontSize=15 \
