@@ -33,6 +33,10 @@ ARG ZELLIJ_VERSION=v0.45.1
 RUN curl -fsSL https://github.com/zellij-org/zellij/releases/download/${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin \
     && chmod +x /usr/local/bin/zellij
 
+# Copy pre-downloaded static starship binary
+COPY starship-bin /usr/local/bin/starship
+RUN chmod +x /usr/local/bin/starship
+
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

@@ -32,6 +32,48 @@ cp -f /etc/zellij/config.kdl "$HOME/.config/zellij/config.kdl" 2>/dev/null || tr
 cp -rf /etc/zellij/layouts/* "$HOME/.config/zellij/layouts/" 2>/dev/null || true
 chown -R "$USER_ID:$GROUP_ID" "$HOME/.config/zellij" 2>/dev/null || true
 
+# Provide phantom-help CLI command
+cat << 'HELPEOF' > /usr/local/bin/phantom-help
+#!/usr/bin/env bash
+cat << 'TXT'
+
+========================================================================
+                   PHANTOM WEB TERMINAL - QUICK HELP
+========================================================================
+
+ [TABS & SESSIONS]
+   Alt + t             : Cipta tab baru (New Tab)
+   Alt + w             : Tutup tab aktif (Close Tab)
+   Alt + Left / Alt + h: Pindah ke tab sebelumnya (Previous Tab)
+   Alt + Right / Alt + l: Pindah ke tab seterusnya (Next Tab)
+
+ [PANES (SPLIT SCREEN)]
+   Alt + n             : Buka split pane baru (New Pane)
+   Alt + f             : Buka / toggle floating terminal window
+   Ctrl + p            : Masuk ke mod Pane (tekan 'd' untuk split bawah, 'r' split kanan)
+
+ [TETIKUS / MOUSE]
+   Klik tab atas       : Pilih tab
+   Klik butang [+]     : Tambah tab baru
+   Klik-Kanan pada tab : Buka menu kontekstual (Rename / Close Tab)
+   Highlight teks      : Salin ke clipboard secara automatik (OSC 52)
+
+ [PWA / STANDALONE APP]
+   Pasang sebagai desktop / mobile app melalui butang install di browser bar!
+
+========================================================================
+TXT
+HELPEOF
+chmod +x /usr/local/bin/phantom-help
+
+# Alias --help to phantom-help for convenience
+cat << 'PROFILEEOF' > /etc/profile.d/phantom.sh
+alias phantom='phantom-help'
+alias help-phantom='phantom-help'
+alias -- -help='phantom-help'
+alias -- --help='phantom-help'
+PROFILEEOF
+
 # Assemble ttyd options
 TTYD_ARGS=(
     --port 8090
