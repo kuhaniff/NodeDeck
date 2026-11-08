@@ -1,9 +1,17 @@
 @font-face {
-  font-family: 'Symbols Nerd Font Mono';
-  src: url('/vendor/SymbolsNerdFontMono-Regular.woff2') format('woff2');
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('/vendor/fonts/JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('/vendor/fonts/JetBrainsMonoNerdFont-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
 }
 
 :root {
@@ -17,7 +25,7 @@
   --accent-color: #7aa2f7;
   --close-hover-bg: #f7768e22;
   --close-hover-color: #f7768e;
-  --font-mono: 'JetBrains Mono', 'Symbols Nerd Font Mono', 'Cascadia Code', ui-monospace, monospace;
+  --font-mono: 'JetBrainsMono Nerd Font', 'Cascadia Code', ui-monospace, monospace;
 }
 
 * {
@@ -218,20 +226,25 @@ html, body {
   padding: 4px 6px;
 }
 
-/* Windows Terminal Scrollbar Styling */
+/* Native-feel Visible Windows Terminal Scrollbar */
+.xterm .xterm-viewport {
+  overflow-y: scroll !important;
+}
+
 .xterm .xterm-viewport::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(15, 17, 21, 0.7);
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #252b38;
-  border-radius: 4px;
+  background: #2a3345;
+  border-radius: 5px;
+  border: 2px solid #0f1115;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: #3e475d;
+  background: #4a5a78;
 }

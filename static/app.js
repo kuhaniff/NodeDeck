@@ -36,14 +36,13 @@
   let activeTabId = null;
   let deferredPrompt = null;
 
-  // Ensure fonts and Nerd Font symbols are loaded before xterm measures cells
+  // Ensure JetBrainsMono Nerd Font is fully loaded before xterm creates glyph textures
   async function ensureFontLoaded() {
     try {
       if (document.fonts) {
         await Promise.all([
-          document.fonts.load('400 14px "JetBrains Mono"'),
-          document.fonts.load('700 14px "JetBrains Mono"'),
-          document.fonts.load('400 14px "Symbols Nerd Font Mono"'),
+          document.fonts.load('400 14px "JetBrainsMono Nerd Font"'),
+          document.fonts.load('700 14px "JetBrainsMono Nerd Font"'),
           document.fonts.ready
         ]);
       }
@@ -104,19 +103,21 @@
     panelEl.dataset.id = id;
     terminalContainer.appendChild(panelEl);
 
-    // Xterm instance with 10,000 line scrollback & Nerd Font support
+    // Native Xterm instance with 10,000 line scrollback & full Nerd Font support
     const term = new Terminal({
       theme: THEME,
-      fontFamily: "'JetBrains Mono', 'Symbols Nerd Font Mono', 'Cascadia Code', monospace",
+      fontFamily: "'JetBrainsMono Nerd Font', 'Cascadia Code', monospace",
       fontSize: 14,
-      lineHeight: 1.25,
+      lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
       allowProposedApi: true,
       convertEol: true,
       scrollback: 10000,
-      scrollSensitivity: 1,
+      scrollSensitivity: 2,
       fastScrollSensitivity: 5,
+      scrollOnUserInput: true,
+      smoothScrollDuration: 0,
       rightClickSelectsWord: false
     });
 
@@ -149,7 +150,7 @@
       }
     });
 
-    // Auto-copy on text selection (Windows Terminal style)
+    // Auto-copy on text selection
     term.onSelectionChange(() => {
       const selection = term.getSelection();
       if (selection && selection.length > 0) {
@@ -174,78 +175,71 @@
 
     // --- Windows Terminal UX: Shortcuts & Mouse ---
 
-    // 1. Windows Terminal Key Handler:
-    // Ctrl+C: copy if selection exists, otherwise send SIGINT interrupt
-    // Ctrl+V: paste from clipboard
+    // 1. Keyboard Handler (Smart Ctrl+C / Ctrl+V without double paste or bracketed paste glitches)
     term.attachCustomKeyEventHandler((e) => {
-      // Ctrl+C
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
-        if (term.hasSelection()) {
-          const selection = term.getSelection();
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(selection).catch(() => {});
+      // Ctrl + C
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+        if (e.type === 'keydown') {
+          if (term.hasSelection()) {
+            const text = term.getSelection();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).catch(() => {});
+            }
+            term.clearSelection();
+            return false; // Handled: copy without sending SIGINT
+          }
+        }
+        return true; // No selection: allow standard SIGINT
+      }
+
+      // Ctrl + Shift + C
+      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+        if (e.type === 'keydown') {
+          const text = term.getSelection();
+          if (text && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(() => {});
           }
           term.clearSelection();
-          return false; // Prevent sending SIGINT \x03
-        }
-        return true; // Send standard SIGINT interrupt
-      }
-
-      // Ctrl+V
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          navigator.clipboard.readText().then((text) => {
-            if (text && tabObj.ws && tabObj.ws.readyState === WebSocket.OPEN) {
-              tabObj.ws.send(text);
-            }
-          }).catch((err) => {
-            console.warn('Clipboard paste failed:', err);
-          });
         }
         return false;
       }
 
-      // Ctrl+Shift+C (Explicit copy)
-      if (e.ctrlKey && e.shiftKey && (e.key === 'c' || e.key === 'C') && e.type === 'keydown') {
-        const selection = term.getSelection();
-        if (selection && navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(selection).catch(() => {});
+      // Ctrl + V or Ctrl + Shift + V (Paste via term.paste API)
+      if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) {
+        if (e.type === 'keydown') {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then((text) => {
+              if (text) {
+                term.paste(text);
+              }
+            }).catch((err) => {
+              console.warn('Clipboard read error:', err);
+            });
+          }
         }
-        return false;
-      }
-
-      // Ctrl+Shift+V (Explicit paste)
-      if (e.ctrlKey && e.shiftKey && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          navigator.clipboard.readText().then((text) => {
-            if (text && tabObj.ws && tabObj.ws.readyState === WebSocket.OPEN) {
-              tabObj.ws.send(text);
-            }
-          }).catch(() => {});
-        }
-        return false;
+        return false; // Prevent raw escape code transmission & duplicate paste
       }
 
       return true;
     });
 
-    // 2. Windows Terminal Right-Click Behavior:
-    // If text is selected -> Copy selection and clear highlight
-    // If no text is selected -> Paste directly from clipboard!
+    // 2. Windows Terminal Right-Click:
+    // If text selected -> Copy selection and clear highlight
+    // If no text selected -> Paste directly from clipboard via term.paste!
     panelEl.addEventListener('contextmenu', async (e) => {
       e.preventDefault();
       if (term.hasSelection()) {
-        const selection = term.getSelection();
+        const text = term.getSelection();
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(selection).catch(() => {});
+          await navigator.clipboard.writeText(text).catch(() => {});
         }
         term.clearSelection();
       } else {
         if (navigator.clipboard && navigator.clipboard.readText) {
           try {
             const text = await navigator.clipboard.readText();
-            if (text && tabObj.ws && tabObj.ws.readyState === WebSocket.OPEN) {
-              tabObj.ws.send(text);
+            if (text) {
+              term.paste(text);
             }
           } catch (err) {
             console.warn('Right-click paste access denied:', err);
@@ -335,6 +329,7 @@
       }
     };
 
+    // Keystroke input: immediate forward with zero lag
     tabObj.term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
@@ -347,7 +342,7 @@
         if (tabs.length > 1) {
           closeTab(tabObj.id, false);
         } else {
-          tabObj.term.write('\r\n\x1b[33m[Session disconnected. Klik [+] untuk tab baru atau refresh]\x1b[0m\r\n');
+          tabObj.term.write('\r\n\x1b[33m[Shell exited. Klik [+] untuk tab baru atau refresh]\x1b[0m\r\n');
         }
       }
     };
@@ -511,19 +506,6 @@
     await ensureFontLoaded();
 
     let initialTabs = loadSavedTabs();
-
-    // If no saved tabs in localStorage, check server active sessions
-    if (!initialTabs || initialTabs.length === 0) {
-      try {
-        const res = await fetch('/api/tabs');
-        if (res.ok) {
-          const serverTabs = await res.json();
-          if (Array.isArray(serverTabs) && serverTabs.length > 0) {
-            initialTabs = serverTabs.map(st => ({ id: st.id, name: st.name || st.id }));
-          }
-        }
-      } catch (e) {}
-    }
 
     if (!initialTabs || initialTabs.length === 0) {
       initialTabs = [{ id: 'main', name: 'shell' }];
