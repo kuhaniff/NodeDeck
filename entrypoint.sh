@@ -31,7 +31,7 @@ chown -R "$USER_ID:$GROUP_ID" "$HOME/.config/zellij" 2>/dev/null || true
 # Kill old sessions
 gosu "$USERNAME" zellij delete-all-sessions -y 2>/dev/null || true
 
-# Launch ttyd with custom index.html (Nerd fonts + styling)
+# Launch ttyd with custom index.html; xterm theme matches config/config.kdl
 exec gosu "$USERNAME" ttyd \
     --port 8090 \
     --writable \
@@ -40,5 +40,7 @@ exec gosu "$USERNAME" ttyd \
     -t disableLeaveAlert=true \
     -t fontSize=15 \
     -t fontFamily="'JetBrains Mono', 'Geist Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace" \
-    -t theme='{"background": "#121212", "foreground": "#e0e0e0", "cursor": "#f8f8f2", "cursorAccent": "#121212", "selectionBackground": "#3e4451", "black": "#1c1c1c", "red": "#ff5555", "green": "#50fa7b", "yellow": "#f1fa8c", "blue": "#bd93f9", "magenta": "#ff79c6", "cyan": "#8be9fd", "white": "#f8f8f2", "brightBlack": "#6272a4", "brightRed": "#ff6e6e", "brightGreen": "#69ff94", "brightYellow": "#ffffa5", "brightBlue": "#d6acff", "brightMagenta": "#ff92df", "brightCyan": "#a4ffff", "brightWhite": "#ffffff"}' \
+    -t titleFixed=phantom \
+    -t disableResizeOverlay=true \
+    -t theme='{"background": "#0f1115", "foreground": "#d8dce4", "cursor": "#7aa2f7", "cursorAccent": "#0f1115", "selectionBackground": "#2a3350", "black": "#1a1d23", "red": "#f7768e", "green": "#9ece6a", "yellow": "#e0af68", "blue": "#7aa2f7", "magenta": "#bb9af7", "cyan": "#7dcfff", "white": "#c5cad6", "brightBlack": "#7a8299", "brightRed": "#ff8fa3", "brightGreen": "#b4e07f", "brightYellow": "#f0c27e", "brightBlue": "#94b8ff", "brightMagenta": "#cdb0ff", "brightCyan": "#9be0ff", "brightWhite": "#ffffff"}' \
     zellij --layout phantom attach --create phantom
