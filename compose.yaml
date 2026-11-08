@@ -5,18 +5,22 @@ services:
       dockerfile: Dockerfile
     image: phantom:latest
     container_name: phantom
+    init: true
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - "${PHANTOM_BIND_IP:-127.0.0.1}:${PHANTOM_PORT:-8090}:8090"
     environment:
-      - PUID=1001
-      - PGID=1001
-      - USER_NAME=hermes
+      - PUID=${PUID:-1001}
+      - PGID=${PGID:-1001}
+      - USER_NAME=${USER_NAME:-hermes}
+      - ENABLE_SUDO=${ENABLE_SUDO:-false}
+      - TTYD_USER=${TTYD_USER:-}
+      - TTYD_PASS=${TTYD_PASS:-}
       - TERM=xterm-256color
       - COLORTERM=truecolor
     volumes:
       - /home/hermes:/home/hermes
-      - /home/aneep/stacks:/home/aneep/stacks
+      - ${STACKS_DIR:-/home/aneep/stacks}:/home/aneep/stacks
       - ./config/config.kdl:/etc/zellij/config.kdl:ro
       - ./config/layouts:/etc/zellij/layouts:ro
       - ./web/index.html:/usr/share/ttyd/index.html:ro
