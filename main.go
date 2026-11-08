@@ -176,9 +176,17 @@ func main() {
 		homeDir = getEnv("HOME", "/root")
 	}
 
-	// 1. Static Web Assets
-	fs := http.FileServer(http.Dir(*staticDir))
-	http.Handle("/", fs)
+	// 1. Static Web Assets with No-Cache for dev/hot updates
+	fileServer := http.FileServer(http.Dir(*staticDir))
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, ".html") || strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".js") || path == "/" {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 
 	// 2. Hosts Management REST API
 	http.HandleFunc("/api/hosts", func(w http.ResponseWriter, r *http.Request) {
