@@ -33,16 +33,17 @@ type WindowSizeMsg struct {
 }
 
 type HostItem struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"` // "local" or "ssh"
-	Host    string `json:"host"`
-	User    string `json:"user"`
-	Port    int    `json:"port"`
-	Auth    string `json:"auth"` // "local", "key", "password"
-	KeyPath string `json:"key_path,omitempty"`
-	Color   string `json:"color"`
-	Desc    string `json:"desc"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"` // "local" or "ssh"
+	Host     string `json:"host"`
+	User     string `json:"user"`
+	Port     int    `json:"port"`
+	Auth     string `json:"auth"` // "local", "key", "password"
+	KeyPath  string `json:"key_path,omitempty"`
+	Password string `json:"password,omitempty"`
+	Color    string `json:"color"`
+	Desc     string `json:"desc"`
 }
 
 type FileItem struct {
@@ -61,6 +62,7 @@ type FileListResponse struct {
 
 var (
 	activeSessions sync.Map // map[string]*exec.Cmd
+	tempSessions   sync.Map // map[string]HostItem
 	hostsMu        sync.Mutex
 	dataDirGlobal  string
 )
@@ -244,6 +246,25 @@ func main() {
 		}
 	})
 
+	// 2b. Ad-hoc / Quick-Connect Session Endpoint
+	http.HandleFunc("/api/session/create", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var item HostItem
+		if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if item.ID == "" {
+			item.ID = fmt.Sprintf("quick-%d", time.Now().UnixNano()%1000000)
+		}
+		tempSessions.Store(item.ID, item)
+		_ = json.NewEncoder(w).Encode(map[string]string{"session_id": item.ID})
+	})
+
 	// 3. File Explorer & Transfer REST API (/api/fs)
 	http.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -337,8 +358,16 @@ func main() {
 	})
 
 	http.HandleFunc("/api/fs/mkdir", func(w http.ResponseWriter, r *http.Request) {
-		targetPath := filepath.Clean(r.URL.Query().Get("path"))
-		if targetPath == "" {
+		targetPath := r.URL.Query().Get("path")
+		if targetPath == "" && r.Body != nil {
+			var bodyData struct {
+				Path string `json:"path"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&bodyData)
+			targetPath = bodyData.Path
+		}
+		targetPath = filepath.Clean(targetPath)
+		if targetPath == "" || targetPath == "." {
 			http.Error(w, "path required", http.StatusBadRequest)
 			return
 		}
@@ -377,22 +406,43 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// 5. WebSocket Terminal Dispatcher (/ws?id=...&host=...)
+	// 5. WebSocket Terminal Dispatcher (/ws?id=...&host=...&session=...)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		tabID := sanitizeID(r.URL.Query().Get("id"))
+		sessionID := r.URL.Query().Get("session")
 		hostID := r.URL.Query().Get("host")
 
-		// Lookup host profile
+		// Lookup host profile: first check tempSessions (Quick Connect), then saved hosts
 		var targetHost HostItem
-		hosts := loadHosts()
-		for _, h := range hosts {
-			if h.ID == hostID {
-				targetHost = h
-				break
+		if sessionID != "" {
+			if val, ok := tempSessions.Load(sessionID); ok {
+				targetHost = val.(HostItem)
 			}
 		}
+
+		if targetHost.ID == "" && hostID != "" {
+			hosts := loadHosts()
+			for _, h := range hosts {
+				if h.ID == hostID {
+					targetHost = h
+					break
+				}
+			}
+		}
+
+		// Fallback
 		if targetHost.ID == "" {
-			targetHost = hosts[0] // fallback to first host (local hermes)
+			hosts := loadHosts()
+			if len(hosts) > 0 {
+				targetHost = hosts[0]
+			} else {
+				targetHost = HostItem{
+					ID:   "local-hermes",
+					Name: "node01 (hermes)",
+					Type: "local",
+					User: "hermes",
+				}
+			}
 		}
 
 		ws, err := upgrader.Upgrade(w, r, nil)
@@ -440,14 +490,36 @@ func main() {
 				"-p", strconv.Itoa(portNum),
 			}
 
-			if targetHost.KeyPath != "" {
-				sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
-			} else if _, err := os.Stat("/home/hermes/.ssh/id_ed25519"); err == nil {
-				sshArgs = append(sshArgs, "-i", "/home/hermes/.ssh/id_ed25519")
+			if targetHost.Auth == "key" {
+				if targetHost.KeyPath != "" {
+					sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
+				} else if _, err := os.Stat("/home/hermes/.ssh/id_ed25519"); err == nil {
+					sshArgs = append(sshArgs, "-i", "/home/hermes/.ssh/id_ed25519")
+				}
+				sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
+				cmd = exec.Command("ssh", sshArgs...)
+			} else if targetHost.Auth == "password" {
+				if targetHost.Password != "" {
+					// Automated password via sshpass
+					fullArgs := append([]string{"-e", "ssh"}, append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))...)
+					cmd = exec.Command("sshpass", fullArgs...)
+				} else {
+					// Interactive password prompt in PTY
+					sshArgs = append(sshArgs,
+						"-o", "PreferredAuthentications=password,keyboard-interactive",
+						"-o", "PubkeyAuthentication=no",
+						fmt.Sprintf("%s@%s", sshUser, sshHost),
+					)
+					cmd = exec.Command("ssh", sshArgs...)
+				}
+			} else {
+				if targetHost.KeyPath != "" {
+					sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
+				}
+				sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
+				cmd = exec.Command("ssh", sshArgs...)
 			}
 
-			sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
-			cmd = exec.Command("ssh", sshArgs...)
 			cmd.Dir = homeDir
 			if os.Getuid() == 0 && puid > 0 {
 				cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -458,13 +530,17 @@ func main() {
 			}
 		}
 
-		cmd.Env = append(os.Environ(),
+		env := append(os.Environ(),
 			"TERM=xterm-256color",
 			"COLORTERM=truecolor",
 			"HOME="+homeDir,
 			"USER="+targetHost.User,
 			"SHELL=/bin/bash",
 		)
+		if targetHost.Auth == "password" && targetHost.Password != "" {
+			env = append(env, "SSHPASS="+targetHost.Password)
+		}
+		cmd.Env = env
 
 		ptmx, err := pty.Start(cmd)
 		if err != nil {

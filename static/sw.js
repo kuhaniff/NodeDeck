@@ -1,9 +1,9 @@
-const CACHE_NAME = 'phantom-cache-v6';
+const CACHE_NAME = 'phantom-cache-v7';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=2.5',
-  '/app.js?v=2.5',
+  '/style.css?v=20261109-v2',
+  '/app.js?v=20261109-v2',
   '/vendor/xterm.js',
   '/vendor/xterm.css',
   '/vendor/addon-fit.js',
