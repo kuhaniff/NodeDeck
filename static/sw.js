@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nodedeck-cache-v1';
+const CACHE_NAME = 'nodedeck-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -11,7 +11,9 @@ const STATIC_ASSETS = [
   '/vendor/fonts/JetBrainsMonoNerdFont-Regular.ttf',
   '/vendor/fonts/JetBrainsMonoNerdFont-Bold.ttf',
   '/manifest.json',
+  '/favicon.png',
   '/favicon.svg',
+  '/logo.png',
   '/icon-192.png',
   '/icon-512.png'
 ];
