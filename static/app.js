@@ -254,8 +254,8 @@
             <rect x="2" y="2" width="20" height="8" rx="2"/>
             <rect x="2" y="14" width="20" height="8" rx="2"/>
           </svg>
-          <div>Tiada hos tersimpan.</div>
-          <p style="font-size:11px; margin-top:4px; opacity:0.8;">Gunakan <b>Sambungan Pantas</b> di atas atau klik <b>[+ Tambah Hos]</b> untuk menambah profil sambungan manual.</p>
+          <div>No saved hosts.</div>
+          <p style="font-size:11px; margin-top:4px; opacity:0.8;">Use <b>Quick Connect</b> above or click <b>[+ Add Host]</b> to save connection profiles.</p>
         </div>
       `;
       return;
@@ -273,7 +273,7 @@
           <div class="host-name">${escapeHtml(h.name)}</div>
           <div class="host-meta">${escapeHtml(meta)}</div>
         </div>
-        <button class="dash-connect-btn" title="Sambung Sesi">
+        <button class="dash-connect-btn" title="Connect Session">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
@@ -299,8 +299,8 @@
             <rect x="2" y="2" width="20" height="8" rx="2"/>
             <rect x="2" y="14" width="20" height="8" rx="2"/>
           </svg>
-          <div>Tiada hos tersimpan</div>
-          <p style="font-size:11px; margin-top:4px; opacity:0.8;">Klik [+ Tambah Sambungan] di bawah.</p>
+          <div>No saved hosts</div>
+          <p style="font-size:11px; margin-top:4px; opacity:0.8;">Click [+ Add Connection] below.</p>
         </div>
       `;
       return;
@@ -338,7 +338,7 @@
           <div class="host-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="host-actions">
-          <button class="host-action-btn host-del" title="Padam Sambungan">
+          <button class="host-action-btn host-del" title="Delete Connection">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -391,7 +391,7 @@
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
-      <span>Tambah Sambungan...</span>
+      <span>Add Connection...</span>
     `;
     addOpt.addEventListener('click', () => {
       hostDropdown.classList.remove('show');
@@ -401,12 +401,12 @@
   }
 
   function promptDeleteHost(hostItem) {
-    showDeleteModal(`Padam sambungan hos '${hostItem.name}'?`, async () => {
+    showDeleteModal(`Delete host connection '${hostItem.name}'?`, async () => {
       try {
         await fetch(`/api/hosts?id=${encodeURIComponent(hostItem.id)}`, { method: 'DELETE' });
         await fetchHosts();
       } catch (err) {
-        alert('Gagal memadam hos: ' + err.message);
+        alert('Failed to delete host: ' + err.message);
       }
     });
   }
@@ -477,10 +477,10 @@
           const newId = 'tab-' + Math.random().toString(36).substring(2, 8);
           createTab(newId, payload.name, payload.name, '#3b82f6', true, data.session_id);
         } else {
-          alert('Gagal memulakan sesi: ' + (await res.text()));
+          alert('Failed to start session: ' + (await res.text()));
         }
       } catch (err) {
-        alert('Ralat sambungan: ' + err.message);
+        alert('Connection error: ' + err.message);
       }
     });
   }
@@ -489,7 +489,7 @@
   function openAddHostModal() {
     formHost.reset();
     document.getElementById('host-input-id').value = '';
-    document.getElementById('modal-host-title').textContent = 'Tambah Sambungan Hos';
+    document.getElementById('modal-host-title').textContent = 'Add Host Connection';
     updateModalFormFields();
     modalHost.classList.add('show');
   }
@@ -560,10 +560,10 @@
         modalHost.classList.remove('show');
         await fetchHosts();
       } else {
-        alert('Gagal simpan sambungan: ' + (await res.text()));
+        alert('Failed to save connection: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Ralat simpan hos: ' + err.message);
+      alert('Error saving host: ' + err.message);
     }
   });
 
@@ -641,7 +641,7 @@
         fsCurrentPath.title = currentFsPath;
         renderFiles(data.items);
       } else {
-        alert('Gagal memuat fail: ' + (await res.text()));
+        alert('Failed to load files: ' + (await res.text()));
       }
     } catch (err) {
       console.error('FS list error:', err);
@@ -692,7 +692,7 @@
         <span class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
         <span class="file-size">${sizeStr}</span>
         ${!isDir ? `
-          <button class="file-action-btn btn-dl" title="Muat Turun Fail">
+          <button class="file-action-btn btn-dl" title="Download File">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
@@ -700,7 +700,7 @@
             </svg>
           </button>
         ` : ''}
-        <button class="file-action-btn btn-del" title="Padam Fail">
+        <button class="file-action-btn btn-del" title="Delete File">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -754,16 +754,16 @@
   modalDeleteClose.addEventListener('click', () => modalDelete.classList.remove('show'));
 
   function promptDeleteFile(path) {
-    showDeleteModal(`Padam fail atau folder '${path}'?`, async () => {
+    showDeleteModal(`Delete file or folder '${path}'?`, async () => {
       try {
         const res = await fetch(`/api/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
         if (res.ok) {
           loadFiles(currentFsPath);
         } else {
-          alert('Gagal memadam fail: ' + (await res.text()));
+          alert('Failed to delete file: ' + (await res.text()));
         }
       } catch (err) {
-        alert('Ralat padam fail: ' + err.message);
+        alert('Error deleting file: ' + err.message);
       }
     });
   }
@@ -797,10 +797,10 @@
         modalMkdir.classList.remove('show');
         loadFiles(currentFsPath);
       } else {
-        alert('Gagal cipta folder: ' + (await res.text()));
+        alert('Failed to create folder: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Ralat cipta folder: ' + err.message);
+      alert('Error creating folder: ' + err.message);
     }
   });
 
@@ -828,10 +828,10 @@
       if (res.ok) {
         loadFiles(currentFsPath);
       } else {
-        alert('Muat naik gagal: ' + (await res.text()));
+        alert('Upload failed: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Ralat muat naik: ' + err.message);
+      alert('Upload error: ' + err.message);
     }
   }
 
@@ -878,7 +878,7 @@
     const closeEl = document.createElement('span');
     closeEl.className = 'tab-close';
     closeEl.innerHTML = '&times;';
-    closeEl.title = 'Tutup tab';
+    closeEl.title = 'Close tab';
 
     tabEl.appendChild(badge);
     tabEl.appendChild(titleEl);
@@ -1060,7 +1060,7 @@
 
     ws.onclose = () => {
       if (!tabObj.closing) {
-        tabObj.term.write('\r\n\x1b[33m[Sesi ditamatkan. Sila pilih sambungan di tab bar atau dashboard]\x1b[0m\r\n');
+        tabObj.term.write('\r\n\x1b[33m[Session closed. Select a connection in the tab bar or dashboard]\x1b[0m\r\n');
       }
     };
   }

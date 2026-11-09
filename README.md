@@ -1,6 +1,9 @@
-# NodeDeck
-
-> **Modern minimalist web terminal & SFTP manager** powered by Go, [xterm.js](https://xtermjs.org/), and JetBrains Mono Nerd Font.
+<div align="center">
+  <img src="nodedeck-logo.png" width="120" alt="NodeDeck Logo" />
+  <h1>NodeDeck</h1>
+  <p><strong>Modern Minimalist Web Terminal & SFTP Manager</strong></p>
+  <p>Built with Go, xterm.js, and JetBrains Mono Nerd Font</p>
+</div>
 
 ---
 
@@ -8,12 +11,12 @@
 
 - **⚡ Lightweight Micro-Stack:** Single static Go binary (`creack/pty` + `gorilla/websocket`) serving assets, managing PTY sessions, and serving SFTP REST endpoints.
 - **🎨 Modern Dark Aesthetic:** Clean flat dark backdrop (`#0f1115`), thin tab bar, collapsible sidebar, blue accent highlights, and bundled JetBrains Mono Nerd Font.
-- **🖥️ Host Manager:** Switch between hosts or custom SSH targets with one click. Manage connection profiles stored in `data/hosts.json`.
+- **🖥️ Host Manager:** Save connection profiles (SSH, Tailscale, Local Shell) with custom badges and passwords/keys. Direct quick-connect from the dashboard.
 - **📂 Built-in SFTP / File Explorer:** Browse server files, upload files via drag-and-drop, download files, create folders, and delete files directly from the collapsible sidebar.
 - **🖱️ Native Terminal UX:** Direct PTY architecture with 10,000-line scrollback buffer, smooth mouse wheel scrolling, automatic highlight-to-copy, and seamless clipboard paste (`Ctrl+Shift+V` / right-click).
-- **📑 Full Tab Control:** Dedicated `[+]` button to open tabs and explicit `(x)` button on each tab to close with mouse. Double-click tab to rename.
+- **📑 Tab Management:** Dedicated `[+]` button to open tabs and explicit `(x)` button on each tab to close with mouse. Double-click tab to rename.
 - **🚀 Native Starship Prompt:** Full interactive Bash login shell with Starship prompt (`hermes@node01 ~`) showing exact working directory and Git status.
-- **📱 PWA (Progressive Web App):** Installable standalone desktop / mobile app with offline shell, custom icons, and web app manifest.
+- **📱 PWA (Progressive Web App):** Installable standalone desktop or mobile application with offline shell, custom icons, and web app manifest.
 - **📖 Built-in Help:** Type `nodedeck`, `-help`, `--help`, or `help-nodedeck` directly in the terminal for quick keyboard shortcuts and features guide.
 
 ---
@@ -52,7 +55,7 @@ Or your configured Cloudflare Access / reverse proxy domain.
 
 - **Localhost Bound by Default:** Published on `127.0.0.1:8090` to prevent unintended LAN/WAN exposure.
 - **Strict Origin Checking:** WebSocket handshake enforces Host-to-Origin matching to prevent Cross-Site WebSocket Hijacking (CSWSH).
-- **Filesystem Blocklist:** Access to private SSH keys, `/etc/shadow`, and `/var/run/docker.sock` via SFTP REST API is blocked.
+- **Filesystem Blocklist:** Access to private SSH keys (`id_*`, `*.pem`, `*.key`), `/etc/shadow`, `/etc/sudoers`, and `/var/run/docker.sock` via SFTP REST API is strictly forbidden (`403 Forbidden`).
 - **Reverse Proxy / Cloudflare Tunnel:** When exposing remotely, route through an HTTPS reverse proxy or Cloudflare Access tunnel with authentication.
 - **Opt-in Sudo:** Container runs unprivileged by default; passwordless sudo is disabled unless explicitly enabled via `ENABLE_SUDO=true`.
 
@@ -76,17 +79,17 @@ Or your configured Cloudflare Access / reverse proxy domain.
 
 | Action | Control / Shortcut |
 | :--- | :--- |
-| **Toggle Sidebar** | Klik ikon menu `☰` atau tekan `Alt` + `b` |
-| **New Tab** | Klik butang `[+]` atau tekan `Alt` + `t` |
-| **Close Tab** | Klik butang `(x)` pada tab atau tekan `Alt` + `w` |
-| **Close Shell** | Taip `exit` atau tekan `Ctrl` + `d` |
-| **Rename Tab** | Dwi-klik pada tajuk tab |
-| **Switch Tab** | Klik tab atau `Alt` + `1` .. `Alt` + `9` |
+| **Toggle Sidebar** | Click menu icon `☰` or press `Alt` + `b` |
+| **New Tab** | Click `[+]` button or press `Alt` + `t` |
+| **Close Tab** | Click `(x)` on tab or press `Alt` + `w` |
+| **Close Shell** | Type `exit` or press `Ctrl` + `d` |
+| **Rename Tab** | Double-click on tab title |
+| **Switch Tab** | Click tab or press `Alt` + `1` .. `Alt` + `9` |
 | **Next / Prev Tab** | `Alt` + `Right` / `Alt` + `Left` |
-| **Copy Text** | Pilih / highlight teks (automatik salin ke papan keratan) |
-| **Paste Text** | `Ctrl` + `Shift` + `v` atau klik kanan tetikus |
-| **Install PWA** | Klik butang `Install` di sebelah kanan tab bar |
-| **CLI Help** | Taip `nodedeck` atau `-help` dalam terminal |
+| **Copy Text** | Select / highlight text (automatically copied to clipboard) |
+| **Paste Text** | `Ctrl` + `Shift` + `v` or mouse right-click |
+| **Install PWA** | Click `Install` on the right side of the tab bar |
+| **CLI Help** | Type `nodedeck` or `-help` in terminal |
 
 ---
 
@@ -100,7 +103,7 @@ nodedeck/
 ├── main.go                 # Go WebSocket server + PTY bridge + SFTP REST API
 ├── go.mod / go.sum         # Go dependencies (creack/pty, gorilla/websocket)
 ├── data/                   # Persistent runtime data
-│   └── hosts.json          # Connection host list
+│   └── hosts.json          # Connection host profiles
 ├── static/                 # Static web assets
 │   ├── index.html          # Web terminal UI + sidebar + SFTP explorer
 │   ├── style.css           # Modern dark styling, sidebar & tab bar
