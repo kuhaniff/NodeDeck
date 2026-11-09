@@ -291,6 +291,7 @@ html, body {
 
 /* Sidebar Container */
 #sidebar {
+  position: relative;
   width: 290px;
   height: 100%;
   background-color: var(--bg-sidebar);
@@ -306,9 +307,22 @@ html, body {
 }
 
 #sidebar.collapsed {
-  margin-left: -290px;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
   opacity: 0;
   pointer-events: none;
+  border-right-color: transparent !important;
+}
+
+body.resizing-sidebar,
+body.resizing-sidebar * {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+
+body.resizing-sidebar #sidebar {
+  transition: none !important;
 }
 
 /* Segmented Tabs (Hosts / Files) */
@@ -1278,4 +1292,213 @@ html, body {
   font-weight: 600;
   color: var(--text-dim);
   text-transform: uppercase;
+}
+
+/* Sidebar Draggable Resizer */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 50;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.resizing {
+  background-color: var(--accent-blue);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
+/* Delete Confirmation Modal */
+.delete-target-pill {
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+/* File Editor Modal (OpenCode Style) */
+.editor-modal-box {
+  width: 92%;
+  max-width: 960px;
+  height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #0c0e14;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85);
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background-color: #121620;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.editor-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  font-family: var(--font-mono);
+}
+
+.editor-dirty-indicator {
+  font-size: 11px;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.editor-path-pill {
+  font-size: 10px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editor-status-text {
+  font-size: 11px;
+  color: #10b981;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.editor-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background-color: #0a0c10;
+}
+
+.editor-line-numbers {
+  width: 44px;
+  padding: 12px 8px 12px 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  background-color: #0f1219;
+  border-right: 1px solid var(--border);
+  user-select: none;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.editor-textarea {
+  flex: 1;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 6px 16px;
+  background-color: #121620;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* SFTP Loading Spinner State */
+.fs-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Terminal Reconnect Overlay */
+.terminal-disconnect-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background-color: #12141c;
+  border-top: 1px solid rgba(239, 68, 68, 0.35);
+  font-size: 12px;
+  color: #fca5a5;
+  z-index: 100;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.terminal-disconnect-bar button {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 4px;
 }

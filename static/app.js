@@ -102,6 +102,23 @@
   const btnConfirmDelete = document.getElementById('btn-confirm-delete');
   const deletePromptMsg = document.getElementById('delete-prompt-msg');
 
+  // Sidebar Resizer DOM
+  const sidebarResizer = document.getElementById('sidebar-resizer');
+
+  // Modal 4: File Preview & Editor DOM (OpenCode Style)
+  const modalEditor = document.getElementById('modal-editor');
+  const modalEditorClose = document.getElementById('modal-editor-close');
+  const editorFilename = document.getElementById('editor-filename');
+  const editorDirty = document.getElementById('editor-dirty');
+  const editorFilepath = document.getElementById('editor-filepath');
+  const editorStatus = document.getElementById('editor-status');
+  const editorBtnSave = document.getElementById('editor-btn-save');
+  const editorBtnDownload = document.getElementById('editor-btn-download');
+  const editorLineNumbers = document.getElementById('editor-line-numbers');
+  const editorTextarea = document.getElementById('editor-textarea');
+  const editorInfoLines = document.getElementById('editor-info-lines');
+  const editorInfoSize = document.getElementById('editor-info-size');
+
   let tabs = [];
   let activeTabId = null;
   let savedHosts = [];
@@ -110,6 +127,9 @@
   let currentFsParent = '';
   let deferredPrompt = null;
   let pendingDeleteAction = null;
+  let currentEditingPath = '';
+  let originalEditorContent = '';
+  let isEditorDirty = false;
 
   // Font verification
   async function ensureFontLoaded() {
@@ -169,6 +189,53 @@
         toggleSidebar();
       });
     }
+
+    initSidebarResizer();
+  }
+
+  function initSidebarResizer() {
+    if (!sidebarResizer || !sidebar) return;
+
+    try {
+      const savedWidth = localStorage.getItem('nodedeck_sidebar_width');
+      if (savedWidth) {
+        const w = parseInt(savedWidth, 10);
+        if (w >= 180 && w <= 700) {
+          sidebar.style.width = w + 'px';
+        }
+      }
+    } catch (e) {}
+
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    sidebarResizer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = sidebar.getBoundingClientRect().width;
+      sidebarResizer.classList.add('resizing');
+      document.body.classList.add('resizing-sidebar');
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const newWidth = Math.max(180, Math.min(700, startWidth + (e.clientX - startX)));
+      sidebar.style.width = newWidth + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isResizing) return;
+      isResizing = false;
+      sidebarResizer.classList.remove('resizing');
+      document.body.classList.remove('resizing-sidebar');
+      try {
+        const currentWidth = Math.round(sidebar.getBoundingClientRect().width);
+        localStorage.setItem('nodedeck_sidebar_width', currentWidth.toString());
+      } catch (e) {}
+      refitActiveTerminal();
+    });
   }
 
   // Segmented Sidebar Navigation (Hosts vs SFTP Files)
@@ -319,7 +386,7 @@
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <div>Tiada sambungan dijumpai</div>
+          <div>No connections found</div>
         </div>
       `;
       return;
@@ -401,7 +468,8 @@
   }
 
   function promptDeleteHost(hostItem) {
-    showDeleteModal(`Delete host connection '${hostItem.name}'?`, async () => {
+    const desc = hostItem.host ? `${hostItem.name} (${hostItem.user}@${hostItem.host})` : hostItem.name;
+    showDeleteModal(desc, async () => {
       try {
         await fetch(`/api/hosts?id=${encodeURIComponent(hostItem.id)}`, { method: 'DELETE' });
         await fetchHosts();
@@ -629,8 +697,16 @@
     });
   }
 
-  async function loadFiles(path) {
+  async function loadFiles(path, silent = false) {
     if (!path) return;
+    if (!silent) {
+      fileList.innerHTML = `
+        <div class="fs-loading-state">
+          <div class="spinner"></div>
+          <span>Loading directory...</span>
+        </div>
+      `;
+    }
     try {
       const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
       if (res.ok) {
@@ -641,10 +717,22 @@
         fsCurrentPath.title = currentFsPath;
         renderFiles(data.items);
       } else {
-        alert('Failed to load files: ' + (await res.text()));
+        const errText = await res.text();
+        fileList.innerHTML = `
+          <div style="padding: 24px 14px; text-align: center; color: #ef4444; font-size: 12px;">
+            <div style="font-weight:600; margin-bottom:4px;">Cannot read directory</div>
+            <div style="font-size:11px; color:var(--text-muted); word-break:break-all;">${escapeHtml(errText)}</div>
+          </div>
+        `;
       }
     } catch (err) {
       console.error('FS list error:', err);
+      fileList.innerHTML = `
+        <div style="padding: 24px 14px; text-align: center; color: #ef4444; font-size: 12px;">
+          <div style="font-weight:600; margin-bottom:4px;">Network Error</div>
+          <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(err.message)}</div>
+        </div>
+      `;
     }
   }
 
@@ -656,7 +744,7 @@
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px; opacity:0.5;">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
-          <div>Folder ini kosong</div>
+          <div>This folder is empty</div>
         </div>
       `;
       return;
@@ -692,6 +780,12 @@
         <span class="file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
         <span class="file-size">${sizeStr}</span>
         ${!isDir ? `
+          <button class="file-action-btn btn-edit" title="Preview / Edit File">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </button>
           <button class="file-action-btn btn-dl" title="Download File">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -700,7 +794,7 @@
             </svg>
           </button>
         ` : ''}
-        <button class="file-action-btn btn-del" title="Delete File">
+        <button class="file-action-btn btn-del" title="Delete">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -709,7 +803,10 @@
       `;
 
       row.addEventListener('click', (e) => {
-        if (e.target.closest('.btn-dl')) {
+        if (e.target.closest('.btn-edit')) {
+          e.stopPropagation();
+          openFileEditor(item.path);
+        } else if (e.target.closest('.btn-dl')) {
           e.stopPropagation();
           downloadFile(item.path);
         } else if (e.target.closest('.btn-del')) {
@@ -718,7 +815,7 @@
         } else if (item.is_dir) {
           loadFiles(item.path);
         } else {
-          downloadFile(item.path);
+          openFileEditor(item.path);
         }
       });
 
@@ -736,8 +833,10 @@
   }
 
   // Delete Modal Trigger
-  function showDeleteModal(message, onConfirm) {
-    deletePromptMsg.textContent = message;
+  function showDeleteModal(itemPath, onConfirm) {
+    if (deletePromptMsg) {
+      deletePromptMsg.textContent = itemPath;
+    }
     pendingDeleteAction = onConfirm;
     modalDelete.classList.add('show');
   }
@@ -752,20 +851,224 @@
 
   btnCancelDelete.addEventListener('click', () => modalDelete.classList.remove('show'));
   modalDeleteClose.addEventListener('click', () => modalDelete.classList.remove('show'));
+  modalDelete.addEventListener('click', (e) => {
+    if (e.target === modalDelete) modalDelete.classList.remove('show');
+  });
 
   function promptDeleteFile(path) {
-    showDeleteModal(`Delete file or folder '${path}'?`, async () => {
+    showDeleteModal(path, async () => {
       try {
         const res = await fetch(`/api/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
         if (res.ok) {
-          loadFiles(currentFsPath);
+          loadFiles(currentFsPath, true);
         } else {
-          alert('Failed to delete file: ' + (await res.text()));
+          const err = await res.text();
+          alert('Failed to delete: ' + err);
         }
       } catch (err) {
-        alert('Error deleting file: ' + err.message);
+        alert('Error deleting item: ' + err.message);
       }
     });
+  }
+
+  // --- 4b. OpenCode File Preview & Editor ---
+  function updateEditorLineNumbers() {
+    if (!editorLineNumbers || !editorTextarea) return;
+    const lineCount = (editorTextarea.value.match(/\n/g) || []).length + 1;
+    let numbers = '';
+    for (let i = 1; i <= lineCount; i++) {
+      numbers += i + '\n';
+    }
+    editorLineNumbers.textContent = numbers;
+  }
+
+  function updateEditorInfo(sizeBytes) {
+    if (!editorInfoLines || !editorInfoSize || !editorTextarea) return;
+    const lineCount = (editorTextarea.value.match(/\n/g) || []).length + 1;
+    editorInfoLines.textContent = `${lineCount} line${lineCount === 1 ? '' : 's'}`;
+    const size = (typeof sizeBytes === 'number') ? sizeBytes : new Blob([editorTextarea.value]).size;
+    editorInfoSize.textContent = formatBytes(size);
+  }
+
+  async function openFileEditor(path) {
+    if (!path) return;
+    currentEditingPath = path;
+    isEditorDirty = false;
+
+    const filename = path.split('/').filter(Boolean).pop() || path;
+    if (editorFilename) editorFilename.textContent = filename;
+    if (editorFilepath) {
+      editorFilepath.textContent = path;
+      editorFilepath.title = path;
+    }
+    if (editorDirty) editorDirty.style.display = 'none';
+    if (editorStatus) {
+      editorStatus.textContent = 'Loading...';
+      editorStatus.style.color = 'var(--text-muted)';
+    }
+    if (editorTextarea) {
+      editorTextarea.value = '';
+      editorTextarea.readOnly = false;
+    }
+    if (editorBtnSave) editorBtnSave.disabled = false;
+    updateEditorLineNumbers();
+    if (modalEditor) modalEditor.classList.add('show');
+
+    try {
+      const res = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        if (editorStatus) {
+          editorStatus.textContent = 'Error: ' + errText;
+          editorStatus.style.color = '#ef4444';
+        }
+        if (editorTextarea) {
+          editorTextarea.value = `// Unable to open file:\n// ${errText}`;
+          editorTextarea.readOnly = true;
+        }
+        if (editorBtnSave) editorBtnSave.disabled = true;
+        updateEditorLineNumbers();
+        return;
+      }
+      const data = await res.json();
+      if (data.is_binary) {
+        if (editorStatus) {
+          editorStatus.textContent = 'Binary file (preview only)';
+          editorStatus.style.color = '#f59e0b';
+        }
+        if (editorTextarea) {
+          editorTextarea.value = `[Binary file: ${filename} (${formatBytes(data.size)})]\nBinary files cannot be edited in text mode.\nUse the Download button in the top right to download the file.`;
+          editorTextarea.readOnly = true;
+        }
+        if (editorBtnSave) editorBtnSave.disabled = true;
+      } else {
+        originalEditorContent = data.content;
+        if (editorTextarea) {
+          editorTextarea.value = data.content;
+          editorTextarea.readOnly = false;
+        }
+        if (editorStatus) {
+          editorStatus.textContent = 'Ready';
+          editorStatus.style.color = '#10b981';
+        }
+        if (editorBtnSave) editorBtnSave.disabled = false;
+      }
+      updateEditorInfo(data.size);
+      updateEditorLineNumbers();
+    } catch (err) {
+      if (editorStatus) {
+        editorStatus.textContent = 'Network error: ' + err.message;
+        editorStatus.style.color = '#ef4444';
+      }
+    }
+  }
+
+  async function saveFileEditor() {
+    if (!currentEditingPath || !editorTextarea || editorTextarea.readOnly) return;
+    if (editorStatus) {
+      editorStatus.textContent = 'Saving...';
+      editorStatus.style.color = '#3b82f6';
+    }
+    if (editorBtnSave) editorBtnSave.disabled = true;
+
+    try {
+      const res = await fetch('/api/fs/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: currentEditingPath,
+          content: editorTextarea.value
+        })
+      });
+
+      if (res.ok) {
+        originalEditorContent = editorTextarea.value;
+        isEditorDirty = false;
+        if (editorDirty) editorDirty.style.display = 'none';
+        if (editorStatus) {
+          editorStatus.textContent = 'Saved';
+          editorStatus.style.color = '#10b981';
+        }
+        setTimeout(() => {
+          if (!isEditorDirty && editorStatus && editorStatus.textContent === 'Saved') {
+            editorStatus.textContent = 'Ready';
+          }
+        }, 2000);
+        if (currentFsPath) loadFiles(currentFsPath, true);
+      } else {
+        const errText = await res.text();
+        if (editorStatus) {
+          editorStatus.textContent = 'Save failed: ' + errText;
+          editorStatus.style.color = '#ef4444';
+        }
+      }
+    } catch (err) {
+      if (editorStatus) {
+        editorStatus.textContent = 'Save error: ' + err.message;
+        editorStatus.style.color = '#ef4444';
+      }
+    } finally {
+      if (editorBtnSave) editorBtnSave.disabled = false;
+    }
+  }
+
+  function closeFileEditor() {
+    if (isEditorDirty) {
+      if (!confirm('You have unsaved changes. Discard them?')) {
+        return;
+      }
+    }
+    if (modalEditor) modalEditor.classList.remove('show');
+  }
+
+  function initFileEditor() {
+    if (!modalEditor) return;
+
+    if (modalEditorClose) {
+      modalEditorClose.addEventListener('click', closeFileEditor);
+    }
+    modalEditor.addEventListener('click', (e) => {
+      if (e.target === modalEditor) closeFileEditor();
+    });
+    if (editorBtnSave) {
+      editorBtnSave.addEventListener('click', saveFileEditor);
+    }
+    if (editorBtnDownload) {
+      editorBtnDownload.addEventListener('click', () => {
+        if (currentEditingPath) downloadFile(currentEditingPath);
+      });
+    }
+
+    if (editorTextarea) {
+      editorTextarea.addEventListener('scroll', () => {
+        if (editorLineNumbers) {
+          editorLineNumbers.scrollTop = editorTextarea.scrollTop;
+        }
+      });
+
+      editorTextarea.addEventListener('input', () => {
+        isEditorDirty = (editorTextarea.value !== originalEditorContent);
+        if (editorDirty) editorDirty.style.display = isEditorDirty ? 'inline-block' : 'none';
+        updateEditorLineNumbers();
+        updateEditorInfo();
+      });
+
+      editorTextarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = editorTextarea.selectionStart;
+          const end = editorTextarea.selectionEnd;
+          editorTextarea.value = editorTextarea.value.substring(0, start) + '  ' + editorTextarea.value.substring(end);
+          editorTextarea.selectionStart = editorTextarea.selectionEnd = start + 2;
+          editorTextarea.dispatchEvent(new Event('input'));
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          saveFileEditor();
+        } else if (e.key === 'Escape') {
+          closeFileEditor();
+        }
+      });
+    }
   }
 
   fsBtnUp.addEventListener('click', () => {
@@ -1025,7 +1328,41 @@
     }
   }
 
+  function showTabDisconnectBar(tabObj) {
+    if (!tabObj || !tabObj.panelEl || tabObj.panelEl.querySelector('.terminal-disconnect-bar')) return;
+    const bar = document.createElement('div');
+    bar.className = 'terminal-disconnect-bar';
+    bar.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span>
+        <span>Session disconnected</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="btn-primary btn-sm btn-reconnect" style="font-size:11px; padding:3px 10px;">Reconnect</button>
+        <button type="button" class="btn-secondary btn-sm btn-close-session" style="font-size:11px; padding:3px 10px;">Close Tab</button>
+      </div>
+    `;
+    const btnReconnect = bar.querySelector('.btn-reconnect');
+    const btnClose = bar.querySelector('.btn-close-session');
+    btnReconnect.addEventListener('click', (e) => {
+      e.stopPropagation();
+      bar.remove();
+      tabObj.term.reset();
+      connectWs(tabObj);
+    });
+    btnClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(tabObj.id);
+    });
+    tabObj.panelEl.appendChild(bar);
+  }
+
   function connectWs(tabObj) {
+    if (tabObj.panelEl) {
+      const existingBar = tabObj.panelEl.querySelector('.terminal-disconnect-bar');
+      if (existingBar) existingBar.remove();
+    }
+
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl = `${proto}//${window.location.host}/ws?id=${encodeURIComponent(tabObj.id)}`;
     if (tabObj.sessionId) {
@@ -1060,7 +1397,8 @@
 
     ws.onclose = () => {
       if (!tabObj.closing) {
-        tabObj.term.write('\r\n\x1b[33m[Session closed. Select a connection in the tab bar or dashboard]\x1b[0m\r\n');
+        tabObj.term.write('\r\n\x1b[33m[Session closed. Reconnect or close this tab]\x1b[0m\r\n');
+        showTabDisconnectBar(tabObj);
       }
     };
   }
@@ -1203,6 +1541,7 @@
   // App Initialization
   async function init() {
     initSidebar();
+    initFileEditor();
     await ensureFontLoaded();
     await fetchHosts();
 

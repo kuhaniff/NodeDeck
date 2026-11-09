@@ -295,6 +295,95 @@ func main() {
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
+	http.HandleFunc("/api/fs/read", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		reqPath := filepath.Clean(r.URL.Query().Get("path"))
+		if reqPath == "" || isBlockedFsPath(reqPath) {
+			http.Error(w, "access denied", http.StatusForbidden)
+			return
+		}
+		info, err := os.Stat(reqPath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if info.IsDir() {
+			http.Error(w, "path is a directory", http.StatusBadRequest)
+			return
+		}
+		const maxEditSize = 2 * 1024 * 1024 // 2MB
+		if info.Size() > maxEditSize {
+			http.Error(w, "file is too large to edit in browser (max 2MB)", http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		data, err := os.ReadFile(reqPath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Basic binary check
+		isBinary := false
+		checkLen := len(data)
+		if checkLen > 512 {
+			checkLen = 512
+		}
+		for i := 0; i < checkLen; i++ {
+			if data[i] == 0 {
+				isBinary = true
+				break
+			}
+		}
+
+		resp := map[string]interface{}{
+			"path":      reqPath,
+			"name":      filepath.Base(reqPath),
+			"size":      info.Size(),
+			"is_binary": isBinary,
+			"content":   string(data),
+		}
+		if isBinary {
+			resp["content"] = ""
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	http.HandleFunc("/api/fs/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var payload struct {
+			Path    string `json:"path"`
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		targetPath := filepath.Clean(payload.Path)
+		if targetPath == "" || isBlockedFsPath(targetPath) {
+			http.Error(w, "access denied", http.StatusForbidden)
+			return
+		}
+		info, err := os.Stat(targetPath)
+		if err == nil && info.IsDir() {
+			http.Error(w, "target is a directory", http.StatusBadRequest)
+			return
+		}
+		perm := os.FileMode(0644)
+		if err == nil {
+			perm = info.Mode().Perm()
+		}
+		if err := os.WriteFile(targetPath, []byte(payload.Content), perm); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"saved"}`))
+	})
+
 	http.HandleFunc("/api/fs/download", func(w http.ResponseWriter, r *http.Request) {
 		targetFile := filepath.Clean(r.URL.Query().Get("path"))
 		if targetFile == "" || isBlockedFsPath(targetFile) {
