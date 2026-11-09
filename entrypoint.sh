@@ -83,30 +83,28 @@ cat << 'HELPEOF' > /usr/local/bin/nodedeck-help
 cat << 'TXT'
 
 ========================================================================
-                   NODEDECK WEB TERMINAL - PANDUAN PANTAS
+                   NODEDECK WEB TERMINAL - QUICK GUIDE
 ========================================================================
 
- [TABS & SESI]
-   Klik [+]              : Cipta tab baru (atau tekan Alt + T)
-   Klik (x) pada tab     : Tutup tab tersebut (atau tekan Alt + W)
-   Klik tab              : Pilih / tukar tab aktif
-   Dwi-klik tajuk tab    : Namakan semula tab (Rename tab)
-   Taip 'exit' / Ctrl+D  : Keluar shell dan tutup tab secara automatik
-   Alt + 1 .. Alt + 9    : Lompat terus ke Tab 1 hingga Tab 9
-   Alt + Left / Right    : Pergi ke tab sebelumnya / seterusnya
+ [TABS & SESSIONS]
+   Click [+]             : Open a new tab (or press Alt + T)
+   Click (x) on tab      : Close active tab (or press Alt + W)
+   Click tab             : Select / switch active tab
+   Double-click tab title: Rename tab
+   Type 'exit' / Ctrl+D  : Exit shell and close tab automatically
+   Alt + 1 .. Alt + 9    : Jump directly to Tab 1 through Tab 9
+   Alt + Left / Right    : Switch to previous / next tab
 
- [TETIKUS & PAPAN KERAT (WINDOWS TERMINAL STYLE)]
-   Pilih / drag tetikus  : Highlight & salin automatik ke Clipboard
-   Klik-Kanan            : Tampal (Paste) jika tiada teks dipilih,
-                           atau Salin (Copy) jika ada pilihan teks
-   Ctrl + C              : Salin pilihan (jika teks dipilih),
-                           atau hantar interrupt SIGINT (jika tiada teks)
-   Ctrl + V              : Tampal (Paste) dari papan keratan
-   Roda Tetikus (Scroll) : Skrol lancar ke atas / bawah (10,000 baris)
+ [MOUSE & CLIPBOARD (WINDOWS TERMINAL STYLE)]
+   Select / drag mouse   : Highlight and copy automatically to clipboard
+   Right-Click           : Paste if no text selected, or copy if text selected
+   Ctrl + C              : Copy selected text (or send interrupt SIGINT)
+   Ctrl + V              : Paste from clipboard
+   Mouse Wheel (Scroll)  : Smooth scrolling up / down (10,000 lines buffer)
 
  [PWA (PROGRESSIVE WEB APP)]
-   Klik butang 'Install' di bahagian kanan tab bar untuk memasang
-   NodeDeck sebagai aplikasi desktop / telefon mudah alih yang berasingan.
+   Click 'Install' on the right side of the tab bar to install
+   NodeDeck as a standalone desktop or mobile application.
 
 ========================================================================
 TXT
