@@ -1,4 +1,4 @@
-// Phantom Terminal - Termius & WebSSH Hybrid Architecture
+// NodeDeck Terminal - Modern Web SSH & SFTP Manager
 (function() {
   'use strict';
 
@@ -136,7 +136,7 @@
       if (btnToggleSidebar) btnToggleSidebar.classList.remove('active');
     }
     try {
-      localStorage.setItem('phantom_sidebar_open', open ? 'true' : 'false');
+      localStorage.setItem('nodedeck_sidebar_open', open ? 'true' : 'false');
     } catch (e) {}
 
     setTimeout(() => {
@@ -152,7 +152,7 @@
   function initSidebar() {
     let shouldOpen = false;
     try {
-      const saved = localStorage.getItem('phantom_sidebar_open');
+      const saved = localStorage.getItem('nodedeck_sidebar_open') || localStorage.getItem('phantom_sidebar_open');
       if (saved !== null) {
         shouldOpen = (saved === 'true');
       } else {

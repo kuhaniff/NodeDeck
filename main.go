@@ -589,7 +589,7 @@ func main() {
 		}
 	})
 
-	log.Printf("Phantom Termius Terminal listening on :%s (static: %s, data: %s)", *port, *staticDir, *dataDir)
+	log.Printf("NodeDeck Terminal listening on :%s (static: %s, data: %s)", *port, *staticDir, *dataDir)
 	if err := http.ListenAndServe(":"+*port, nil); err != nil {
 		log.Fatalf("Server exited: %v", err)
 	}

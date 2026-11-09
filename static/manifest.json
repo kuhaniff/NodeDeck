@@ -1,7 +1,7 @@
 {
-  "name": "Phantom Terminal",
-  "short_name": "Phantom",
-  "description": "Minimalist, flat, modern Ghostty-like web terminal",
+  "name": "NodeDeck Terminal",
+  "short_name": "NodeDeck",
+  "description": "Minimalist, flat, modern Web SSH Terminal & SFTP",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

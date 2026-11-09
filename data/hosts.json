@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": "host-690995",
+    "name": "hermes",
+    "type": "ssh",
+    "host": "192.168.8.10",
+    "user": "hermes",
+    "port": 22,
+    "auth": "password",
+    "password": "0000",
+    "color": "#f59e0b",
+    "desc": ""
+  },
+  {
+    "id": "host-21059",
+    "name": "aneep",
+    "type": "ssh",
+    "host": "192.168.8.10",
+    "user": "aneep",
+    "port": 22,
+    "auth": "password",
+    "password": "0000",
+    "color": "#3b82f6",
+    "desc": ""
+  }
+]

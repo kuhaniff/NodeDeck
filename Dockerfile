@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY main.go ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o phantom-server main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o nodedeck-server main.go
 
 # Stage 2: Minimal Debian 13 runtime
 FROM debian:13-slim
@@ -39,12 +39,12 @@ ENV LC_ALL=en_US.UTF-8
 COPY starship-bin /usr/local/bin/starship
 RUN chmod +x /usr/local/bin/starship
 
-# Phantom server binary
-COPY --from=builder /build/phantom-server /usr/local/bin/phantom-server
-RUN chmod +x /usr/local/bin/phantom-server
+# NodeDeck server binary
+COPY --from=builder /build/nodedeck-server /usr/local/bin/nodedeck-server
+RUN chmod +x /usr/local/bin/nodedeck-server
 
 # Static frontend assets
-COPY static /usr/share/phantom/static
+COPY static /usr/share/nodedeck/static
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

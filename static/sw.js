@@ -1,4 +1,4 @@
-const CACHE_NAME = 'phantom-cache-v7';
+const CACHE_NAME = 'nodedeck-cache-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

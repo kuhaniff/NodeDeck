@@ -77,13 +77,13 @@ alias su='sudo su'
 BASHRC
 fi
 
-# Provide phantom-help CLI command
-cat << 'HELPEOF' > /usr/local/bin/phantom-help
+# Provide nodedeck-help CLI command
+cat << 'HELPEOF' > /usr/local/bin/nodedeck-help
 #!/usr/bin/env bash
 cat << 'TXT'
 
 ========================================================================
-                   PHANTOM WEB TERMINAL - PANDUAN PANTAS
+                   NODEDECK WEB TERMINAL - PANDUAN PANTAS
 ========================================================================
 
  [TABS & SESI]
@@ -106,25 +106,27 @@ cat << 'TXT'
 
  [PWA (PROGRESSIVE WEB APP)]
    Klik butang 'Install' di bahagian kanan tab bar untuk memasang
-   Phantom sebagai aplikasi desktop / telefon mudah alih yang berasingan.
+   NodeDeck sebagai aplikasi desktop / telefon mudah alih yang berasingan.
 
 ========================================================================
 TXT
 HELPEOF
-chmod +x /usr/local/bin/phantom-help
+chmod +x /usr/local/bin/nodedeck-help
 
 # Create symlinks for all help command variants
-ln -sf /usr/local/bin/phantom-help /usr/local/bin/phantom
-ln -sf /usr/local/bin/phantom-help /usr/local/bin/-help
-ln -sf /usr/local/bin/phantom-help /usr/local/bin/--help
-ln -sf /usr/local/bin/phantom-help /usr/local/bin/help-phantom
+ln -sf /usr/local/bin/nodedeck-help /usr/local/bin/nodedeck
+ln -sf /usr/local/bin/nodedeck-help /usr/local/bin/phantom
+ln -sf /usr/local/bin/nodedeck-help /usr/local/bin/-help
+ln -sf /usr/local/bin/nodedeck-help /usr/local/bin/--help
+ln -sf /usr/local/bin/nodedeck-help /usr/local/bin/help-nodedeck
 
 # Profile aliases & ergonomics
-cat << 'PROFILEEOF' > /etc/profile.d/phantom.sh
-alias phantom='phantom-help'
-alias help-phantom='phantom-help'
-alias -- -help='phantom-help'
-alias -- --help='phantom-help'
+cat << 'PROFILEEOF' > /etc/profile.d/nodedeck.sh
+alias nodedeck='nodedeck-help'
+alias phantom='nodedeck-help'
+alias help-nodedeck='nodedeck-help'
+alias -- -help='nodedeck-help'
+alias -- --help='nodedeck-help'
 alias su='sudo su'
 
 sudo() {
@@ -140,4 +142,4 @@ sudo() {
 }
 PROFILEEOF
 
-exec gosu "$USERNAME" /usr/local/bin/phantom-server -port 8090 -static /usr/share/phantom/static -data /usr/share/phantom/data
+exec gosu "$USERNAME" /usr/local/bin/nodedeck-server -port 8090 -static /usr/share/nodedeck/static -data /usr/share/nodedeck/data
