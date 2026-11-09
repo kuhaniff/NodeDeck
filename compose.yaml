@@ -1,15 +1,15 @@
 services:
-  phantom:
+  nodedeck:
     hostname: node01
     build:
       context: .
       dockerfile: Dockerfile
-    image: phantom:latest
-    container_name: phantom
+    image: nodedeck:latest
+    container_name: nodedeck
     init: true
     restart: unless-stopped
     ports:
-      - "${PHANTOM_BIND_IP:-127.0.0.1}:${PHANTOM_PORT:-8090}:8090"
+      - "${NODEDECK_BIND_IP:-127.0.0.1}:${NODEDECK_PORT:-8090}:8090"
     environment:
       - PUID=${PUID:-1001}
       - PGID=${PGID:-1001}
@@ -21,8 +21,8 @@ services:
       - /home/hermes:/home/hermes
       - ${STACKS_DIR:-/home/aneep/stacks}:/home/aneep/stacks
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data:/usr/share/phantom/data
-      - ./static:/usr/share/phantom/static:ro
+      - ./data:/usr/share/nodedeck/data
+      - ./static:/usr/share/nodedeck/static:ro
       - ./entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
     working_dir: /home/hermes
     logging:

@@ -1,4 +1,4 @@
-module phantom
+module nodedeck
 
 go 1.24.13
 
