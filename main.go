@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,16 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Protected via reverse proxy / Cloudflare Tunnel / local loopback
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Native client / local curl
+		}
+		u, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		// Strict origin matching against Host header to prevent Cross-Site WebSocket Hijacking (CSWSH)
+		return strings.EqualFold(u.Host, r.Host)
 	},
 }
 
@@ -96,50 +106,12 @@ func loadHosts() []HostItem {
 	var hosts []HostItem
 
 	if data, err := os.ReadFile(dataFile); err == nil {
-		if err := json.Unmarshal(data, &hosts); err == nil && len(hosts) > 0 {
+		if err := json.Unmarshal(data, &hosts); err == nil {
 			return hosts
 		}
 	}
 
-	// Default preset hosts
-	hosts = []HostItem{
-		{
-			ID:    "node01-hermes",
-			Name:  "node01 (hermes)",
-			Type:  "local",
-			Host:  "localhost",
-			User:  "hermes",
-			Port:  22,
-			Auth:  "local",
-			Color: "#7aa2f7",
-			Desc:  "Local shell as hermes",
-		},
-		{
-			ID:    "node01-aneep",
-			Name:  "node01 (aneep)",
-			Type:  "local",
-			Host:  "localhost",
-			User:  "aneep",
-			Port:  22,
-			Auth:  "local",
-			Color: "#e0af68",
-			Desc:  "Local shell as aneep",
-		},
-		{
-			ID:      "node02",
-			Name:    "node02",
-			Type:    "ssh",
-			Host:    "100.92.218.94",
-			User:    "aneep",
-			Port:    22,
-			Auth:    "key",
-			KeyPath: "/home/hermes/.ssh/id_ed25519",
-			Color:   "#9ece6a",
-			Desc:    "Tailscale Node 02 (100.92.218.94)",
-		},
-	}
-	_ = saveHostsInternal(hosts)
-	return hosts
+	return []HostItem{}
 }
 
 func saveHostsInternal(hosts []HostItem) error {
@@ -156,6 +128,22 @@ func saveHosts(hosts []HostItem) error {
 	hostsMu.Lock()
 	defer hostsMu.Unlock()
 	return saveHostsInternal(hosts)
+}
+
+func isBlockedFsPath(path string) bool {
+	clean := filepath.Clean(path)
+	base := filepath.Base(clean)
+	// Block sensitive credentials, keys, shadow, and docker socket
+	if strings.HasPrefix(base, "id_") || strings.HasSuffix(base, ".pem") || strings.HasSuffix(base, ".key") {
+		return true
+	}
+	if base == "shadow" || base == "sudoers" || base == "docker.sock" {
+		return true
+	}
+	if clean == "/" || clean == "/etc" || clean == "/proc" || clean == "/sys" {
+		return true
+	}
+	return false
 }
 
 func main() {
@@ -270,9 +258,14 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		reqPath := r.URL.Query().Get("path")
 		if reqPath == "" {
-			reqPath = homeDir
+			http.Error(w, "path required", http.StatusBadRequest)
+			return
 		}
 		reqPath = filepath.Clean(reqPath)
+		if isBlockedFsPath(reqPath) {
+			http.Error(w, "access denied", http.StatusForbidden)
+			return
+		}
 
 		entries, err := os.ReadDir(reqPath)
 		if err != nil {
@@ -304,8 +297,8 @@ func main() {
 
 	http.HandleFunc("/api/fs/download", func(w http.ResponseWriter, r *http.Request) {
 		targetFile := filepath.Clean(r.URL.Query().Get("path"))
-		if targetFile == "" {
-			http.Error(w, "path required", http.StatusBadRequest)
+		if targetFile == "" || isBlockedFsPath(targetFile) {
+			http.Error(w, "access denied", http.StatusForbidden)
 			return
 		}
 		info, err := os.Stat(targetFile)
@@ -319,8 +312,9 @@ func main() {
 
 	http.HandleFunc("/api/fs/upload", func(w http.ResponseWriter, r *http.Request) {
 		targetDir := filepath.Clean(r.URL.Query().Get("path"))
-		if targetDir == "" {
-			targetDir = homeDir
+		if targetDir == "" || isBlockedFsPath(targetDir) {
+			http.Error(w, "access denied", http.StatusForbidden)
+			return
 		}
 
 		mr, err := r.MultipartReader()
@@ -381,7 +375,7 @@ func main() {
 
 	http.HandleFunc("/api/fs/delete", func(w http.ResponseWriter, r *http.Request) {
 		targetPath := filepath.Clean(r.URL.Query().Get("path"))
-		if targetPath == "" || targetPath == "/" || targetPath == homeDir {
+		if targetPath == "" || targetPath == "/" || isBlockedFsPath(targetPath) {
 			http.Error(w, "protected path", http.StatusForbidden)
 			return
 		}
@@ -430,19 +424,10 @@ func main() {
 			}
 		}
 
-		// Fallback
+		// Reject if no valid session or host is found
 		if targetHost.ID == "" {
-			hosts := loadHosts()
-			if len(hosts) > 0 {
-				targetHost = hosts[0]
-			} else {
-				targetHost = HostItem{
-					ID:   "local-hermes",
-					Name: "node01 (hermes)",
-					Type: "local",
-					User: "hermes",
-				}
-			}
+			http.Error(w, "Target host or session not found", http.StatusBadRequest)
+			return
 		}
 
 		ws, err := upgrader.Upgrade(w, r, nil)

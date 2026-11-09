@@ -140,4 +140,4 @@ sudo() {
 }
 PROFILEEOF
 
-exec gosu "$USERNAME" /usr/local/bin/phantom-server -port 8090 -static /usr/share/phantom/static
+exec gosu "$USERNAME" /usr/local/bin/phantom-server -port 8090 -static /usr/share/phantom/static -data /usr/share/phantom/data
