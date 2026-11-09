@@ -1,4 +1,4 @@
-// Phantom Terminal - Modern Termius / Warp Style Frontend Logic
+// Phantom Terminal - Termius & WebSSH Hybrid Architecture
 (function() {
   'use strict';
 
@@ -27,9 +27,10 @@
     brightWhite: '#c0caf5'
   };
 
-  // DOM Elements
+  // DOM Elements - Header & Global
   const tabsContainer = document.getElementById('tabs-container');
   const terminalContainer = document.getElementById('terminal-container');
+  const btnDashboard = document.getElementById('btn-dashboard');
   const btnNewTab = document.getElementById('btn-new-tab');
   const hostDropdown = document.getElementById('host-dropdown');
   const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
@@ -38,14 +39,29 @@
   const btnQuickAddHost = document.getElementById('btn-quick-add-host');
   const btnAddHost = document.getElementById('btn-add-host');
 
-  // Sidebar Views & Host / FS DOM
+  // Dashboard DOM
+  const dashboardView = document.getElementById('dashboard-view');
+  const dashHostsGrid = document.getElementById('dash-hosts-grid');
+  const dashBtnAddHost = document.getElementById('dash-btn-add-host');
+  const formQuickConnect = document.getElementById('form-quick-connect');
+  const qcHost = document.getElementById('qc-host');
+  const qcPort = document.getElementById('qc-port');
+  const qcUser = document.getElementById('qc-user');
+  const qcAuth = document.getElementById('qc-auth');
+  const qcPassword = document.getElementById('qc-password');
+  const qcKeypath = document.getElementById('qc-keypath');
+  const qcGroupPassword = document.getElementById('qc-group-password');
+  const qcGroupKey = document.getElementById('qc-group-key');
+  const qcBtnEye = document.getElementById('qc-btn-eye');
+
+  // Sidebar DOM
   const navTabs = document.querySelectorAll('.sidebar-nav .nav-tab');
   const viewHosts = document.getElementById('view-hosts');
   const viewFiles = document.getElementById('view-files');
   const hostSearch = document.getElementById('host-search');
   const hostList = document.getElementById('host-list');
 
-  // FS DOM
+  // SFTP DOM
   const fsCurrentPath = document.getElementById('fs-current-path');
   const fsBtnUp = document.getElementById('fs-btn-up');
   const fsBtnRefresh = document.getElementById('fs-btn-refresh');
@@ -53,12 +69,32 @@
   const fsFileInput = document.getElementById('fs-file-input');
   const fileList = document.getElementById('file-list');
 
-  // Modal DOM
+  // Modal 1: Host Add / Edit DOM
   const modalHost = document.getElementById('modal-host');
   const modalHostClose = document.getElementById('modal-host-close');
   const btnCancelHost = document.getElementById('btn-cancel-host');
   const formHost = document.getElementById('form-host');
   const hostInputType = document.getElementById('host-input-type');
+  const hostInputAuth = document.getElementById('host-input-auth');
+  const hostInputPassword = document.getElementById('host-input-password');
+  const groupHostPassword = document.getElementById('group-host-password');
+  const groupHostKey = document.getElementById('group-host-key');
+  const hostBtnEye = document.getElementById('host-btn-eye');
+
+  // Modal 2: Create Folder DOM
+  const modalMkdir = document.getElementById('modal-mkdir');
+  const modalMkdirClose = document.getElementById('modal-mkdir-close');
+  const btnCancelMkdir = document.getElementById('btn-cancel-mkdir');
+  const formMkdir = document.getElementById('form-mkdir');
+  const mkdirParentPath = document.getElementById('mkdir-parent-path');
+  const mkdirInputName = document.getElementById('mkdir-input-name');
+
+  // Modal 3: Confirm Delete DOM
+  const modalDelete = document.getElementById('modal-delete');
+  const modalDeleteClose = document.getElementById('modal-delete-close');
+  const btnCancelDelete = document.getElementById('btn-cancel-delete');
+  const btnConfirmDelete = document.getElementById('btn-confirm-delete');
+  const deletePromptMsg = document.getElementById('delete-prompt-msg');
 
   let tabs = [];
   let activeTabId = null;
@@ -66,6 +102,7 @@
   let currentFsPath = '/home/hermes';
   let currentFsParent = '/home';
   let deferredPrompt = null;
+  let pendingDeleteAction = null;
 
   // Font verification
   async function ensureFontLoaded() {
@@ -82,7 +119,7 @@
     }
   }
 
-  // --- 1. Sidebar Collapse & Layout Control ---
+  // --- 1. Sidebar Management ---
   function setSidebarOpen(open) {
     if (open) {
       sidebar.classList.remove('collapsed');
@@ -106,13 +143,13 @@
   }
 
   function initSidebar() {
-    let shouldOpen = true;
+    let shouldOpen = false;
     try {
       const saved = localStorage.getItem('phantom_sidebar_open');
       if (saved !== null) {
         shouldOpen = (saved === 'true');
       } else {
-        shouldOpen = (window.innerWidth >= 850);
+        shouldOpen = (window.innerWidth >= 900);
       }
     } catch (e) {}
 
@@ -144,7 +181,39 @@
     });
   });
 
-  // --- 2. Hosts Management ---
+  // --- 2. Dashboard & View Switching ---
+  function showDashboard() {
+    activeTabId = null;
+    tabs.forEach(t => {
+      t.tabEl.classList.remove('active');
+      t.panelEl.classList.remove('active');
+    });
+
+    if (dashboardView) {
+      dashboardView.style.display = 'block';
+    }
+    if (btnDashboard) {
+      btnDashboard.classList.add('active');
+    }
+  }
+
+  function hideDashboard() {
+    if (dashboardView) {
+      dashboardView.style.display = 'none';
+    }
+    if (btnDashboard) {
+      btnDashboard.classList.remove('active');
+    }
+  }
+
+  if (btnDashboard) {
+    btnDashboard.addEventListener('click', (e) => {
+      e.preventDefault();
+      showDashboard();
+    });
+  }
+
+  // --- 3. Hosts Management ---
   async function fetchHosts() {
     try {
       const res = await fetch('/api/hosts');
@@ -152,13 +221,46 @@
         savedHosts = await res.json();
         renderHostList();
         renderHostDropdown();
+        renderDashboardHosts();
       }
     } catch (err) {
       console.error('Failed to load hosts:', err);
     }
   }
 
+  function renderDashboardHosts() {
+    if (!dashHostsGrid) return;
+    dashHostsGrid.innerHTML = '';
+
+    savedHosts.forEach(h => {
+      const item = document.createElement('div');
+      item.className = 'dash-host-item';
+      const color = h.color || '#3b82f6';
+      const meta = h.type === 'local' ? `Local Shell (${h.user})` : `${h.user}@${h.host}:${h.port || 22}`;
+
+      item.innerHTML = `
+        <span class="host-status-dot" style="background:${color}; color:${color}"></span>
+        <div class="host-info">
+          <div class="host-name">${escapeHtml(h.name)}</div>
+          <div class="host-meta">${escapeHtml(meta)}</div>
+        </div>
+        <button class="dash-connect-btn" title="Sambung Sesi">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+        </button>
+      `;
+
+      item.addEventListener('click', () => {
+        openTabForHost(h);
+      });
+
+      dashHostsGrid.appendChild(item);
+    });
+  }
+
   function renderHostList(filter = '') {
+    if (!hostList) return;
     hostList.innerHTML = '';
     const filtered = savedHosts.filter(h => 
       (h.name || '').toLowerCase().includes(filter.toLowerCase()) || 
@@ -204,7 +306,7 @@
       card.addEventListener('click', (e) => {
         if (e.target.closest('.host-del')) {
           e.stopPropagation();
-          deleteHost(h.id);
+          promptDeleteHost(h);
         } else {
           openTabForHost(h);
         }
@@ -215,6 +317,7 @@
   }
 
   function renderHostDropdown() {
+    if (!hostDropdown) return;
     hostDropdown.innerHTML = '';
     savedHosts.forEach(h => {
       const item = document.createElement('div');
@@ -250,35 +353,128 @@
     hostDropdown.appendChild(addOpt);
   }
 
-  async function deleteHost(id) {
-    if (!confirm('Padam sambungan hos ini?')) return;
-    try {
-      await fetch(`/api/hosts?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-      await fetchHosts();
-    } catch (err) {
-      alert('Gagal memadam hos: ' + err.message);
-    }
+  function promptDeleteHost(hostItem) {
+    showDeleteModal(`Padam sambungan hos '${hostItem.name}'?`, async () => {
+      try {
+        await fetch(`/api/hosts?id=${encodeURIComponent(hostItem.id)}`, { method: 'DELETE' });
+        await fetchHosts();
+      } catch (err) {
+        alert('Gagal memadam hos: ' + err.message);
+      }
+    });
   }
 
+  // Eye toggle helper
+  function setupPasswordEyeToggle(btn, input) {
+    if (!btn || !input) return;
+    btn.addEventListener('click', () => {
+      const isPwd = (input.type === 'password');
+      input.type = isPwd ? 'text' : 'password';
+      btn.style.color = isPwd ? 'var(--accent-blue)' : 'var(--text-dim)';
+    });
+  }
+
+  setupPasswordEyeToggle(qcBtnEye, qcPassword);
+  setupPasswordEyeToggle(hostBtnEye, hostInputPassword);
+
+  // Quick Connect Auth switcher
+  if (qcAuth) {
+    qcAuth.addEventListener('change', () => {
+      const val = qcAuth.value;
+      if (val === 'password') {
+        qcGroupPassword.style.display = 'block';
+        qcGroupKey.style.display = 'none';
+      } else if (val === 'key') {
+        qcGroupPassword.style.display = 'none';
+        qcGroupKey.style.display = 'block';
+      } else {
+        qcGroupPassword.style.display = 'none';
+        qcGroupKey.style.display = 'none';
+      }
+    });
+  }
+
+  // Quick Connect Form Submit
+  if (formQuickConnect) {
+    formQuickConnect.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const host = qcHost.value.trim();
+      const port = parseInt(qcPort.value, 10) || 22;
+      const user = qcUser.value.trim();
+      const auth = qcAuth.value;
+      const password = qcPassword ? qcPassword.value : '';
+      const keyPath = qcKeypath ? qcKeypath.value.trim() : '';
+
+      if (!host || !user) return;
+
+      const payload = {
+        name: `${user}@${host}`,
+        type: 'ssh',
+        host,
+        port,
+        user,
+        auth,
+        password: auth === 'password' ? password : '',
+        key_path: auth === 'key' ? keyPath : '',
+        color: '#3b82f6'
+      };
+
+      try {
+        const res = await fetch('/api/session/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const newId = 'tab-' + Math.random().toString(36).substring(2, 8);
+          createTab(newId, payload.name, payload.name, '#3b82f6', true, data.session_id);
+        } else {
+          alert('Gagal memulakan sesi: ' + (await res.text()));
+        }
+      } catch (err) {
+        alert('Ralat sambungan: ' + err.message);
+      }
+    });
+  }
+
+  // Host Modal View Updates
   function openAddHostModal() {
     formHost.reset();
     document.getElementById('host-input-id').value = '';
     document.getElementById('modal-host-title').textContent = 'Tambah Sambungan Hos';
-    updateModalFormFields('ssh');
+    updateModalFormFields();
     modalHost.classList.add('show');
   }
 
-  function updateModalFormFields(type) {
+  function updateModalFormFields() {
+    const type = hostInputType.value;
+    const auth = hostInputAuth.value;
     const isLocal = (type === 'local');
+
     document.getElementById('group-host-address').style.display = isLocal ? 'none' : 'block';
     document.getElementById('group-host-port').style.display = isLocal ? 'none' : 'block';
     document.getElementById('group-host-auth').style.display = isLocal ? 'none' : 'block';
-    document.getElementById('group-host-key').style.display = isLocal ? 'none' : 'block';
+
+    if (isLocal) {
+      groupHostPassword.style.display = 'none';
+      groupHostKey.style.display = 'none';
+    } else {
+      if (auth === 'password') {
+        groupHostPassword.style.display = 'block';
+        groupHostKey.style.display = 'none';
+      } else if (auth === 'key') {
+        groupHostPassword.style.display = 'none';
+        groupHostKey.style.display = 'block';
+      } else {
+        groupHostPassword.style.display = 'none';
+        groupHostKey.style.display = 'none';
+      }
+    }
   }
 
-  hostInputType.addEventListener('change', (e) => {
-    updateModalFormFields(e.target.value);
-  });
+  hostInputType.addEventListener('change', updateModalFormFields);
+  hostInputAuth.addEventListener('change', updateModalFormFields);
 
   formHost.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -287,7 +483,8 @@
     const address = document.getElementById('host-input-address').value.trim();
     const user = document.getElementById('host-input-user').value.trim();
     const port = parseInt(document.getElementById('host-input-port').value, 10) || 22;
-    const auth = document.getElementById('host-input-auth').value;
+    const auth = hostInputAuth.value;
+    const password = hostInputPassword ? hostInputPassword.value : '';
     const keyPath = document.getElementById('host-input-keypath').value.trim();
     const colorEl = document.querySelector('input[name="host-color"]:checked');
     const color = colorEl ? colorEl.value : '#3b82f6';
@@ -301,7 +498,8 @@
       port,
       user,
       auth,
-      key_path: keyPath,
+      password: auth === 'password' ? password : '',
+      key_path: auth === 'key' ? keyPath : '',
       color
     };
 
@@ -326,6 +524,7 @@
   btnCancelHost.addEventListener('click', () => modalHost.classList.remove('show'));
   btnAddHost.addEventListener('click', openAddHostModal);
   btnQuickAddHost.addEventListener('click', openAddHostModal);
+  if (dashBtnAddHost) dashBtnAddHost.addEventListener('click', openAddHostModal);
 
   hostSearch.addEventListener('input', (e) => {
     renderHostList(e.target.value);
@@ -343,7 +542,7 @@
     }
   });
 
-  // --- 3. SFTP / File Explorer ---
+  // --- 4. SFTP / File Explorer ---
   async function loadFiles(path = '/home/hermes') {
     try {
       const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
@@ -428,7 +627,7 @@
           downloadFile(item.path);
         } else if (e.target.closest('.btn-del')) {
           e.stopPropagation();
-          deleteFile(item.path);
+          promptDeleteFile(item.path);
         } else if (item.is_dir) {
           loadFiles(item.path);
         } else {
@@ -449,18 +648,37 @@
     a.remove();
   }
 
-  async function deleteFile(path) {
-    if (!confirm(`Padam '${path}'?`)) return;
-    try {
-      const res = await fetch(`/api/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadFiles(currentFsPath);
-      } else {
-        alert('Gagal memadam fail: ' + (await res.text()));
-      }
-    } catch (err) {
-      alert('Ralat padam fail: ' + err.message);
+  // Delete Modal Trigger
+  function showDeleteModal(message, onConfirm) {
+    deletePromptMsg.textContent = message;
+    pendingDeleteAction = onConfirm;
+    modalDelete.classList.add('show');
+  }
+
+  btnConfirmDelete.addEventListener('click', async () => {
+    modalDelete.classList.remove('show');
+    if (pendingDeleteAction) {
+      await pendingDeleteAction();
+      pendingDeleteAction = null;
     }
+  });
+
+  btnCancelDelete.addEventListener('click', () => modalDelete.classList.remove('show'));
+  modalDeleteClose.addEventListener('click', () => modalDelete.classList.remove('show'));
+
+  function promptDeleteFile(path) {
+    showDeleteModal(`Padam fail atau folder '${path}'?`, async () => {
+      try {
+        const res = await fetch(`/api/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadFiles(currentFsPath);
+        } else {
+          alert('Gagal memadam fail: ' + (await res.text()));
+        }
+      } catch (err) {
+        alert('Ralat padam fail: ' + err.message);
+      }
+    });
   }
 
   fsBtnUp.addEventListener('click', () => {
@@ -473,21 +691,34 @@
     loadFiles(currentFsPath);
   });
 
-  fsBtnMkdir.addEventListener('click', async () => {
-    const name = prompt('Nama folder baru:');
-    if (!name || !name.trim()) return;
-    const newPath = currentFsPath + '/' + name.trim();
+  // Folder creation via custom modal
+  fsBtnMkdir.addEventListener('click', () => {
+    mkdirParentPath.textContent = currentFsPath;
+    mkdirInputName.value = '';
+    modalMkdir.classList.add('show');
+    setTimeout(() => mkdirInputName.focus(), 50);
+  });
+
+  formMkdir.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = mkdirInputName.value.trim();
+    if (!name) return;
+    const targetDir = currentFsPath.replace(/\/+$/, '') + '/' + name;
     try {
-      const res = await fetch(`/api/fs/mkdir?path=${encodeURIComponent(newPath)}`, { method: 'POST' });
+      const res = await fetch(`/api/fs/mkdir?path=${encodeURIComponent(targetDir)}`, { method: 'POST' });
       if (res.ok) {
+        modalMkdir.classList.remove('show');
         loadFiles(currentFsPath);
       } else {
-        alert('Gagal buat folder: ' + (await res.text()));
+        alert('Gagal cipta folder: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Ralat: ' + err.message);
+      alert('Ralat cipta folder: ' + err.message);
     }
   });
+
+  btnCancelMkdir.addEventListener('click', () => modalMkdir.classList.remove('show'));
+  modalMkdirClose.addEventListener('click', () => modalMkdir.classList.remove('show'));
 
   fsFileInput.addEventListener('change', async (e) => {
     const files = e.target.files;
@@ -534,13 +765,13 @@
     }
   });
 
-  // --- 4. Terminal & Tab Management ---
+  // --- 5. Terminal & Tab Management ---
   function openTabForHost(hostItem) {
     const newId = 'tab-' + Math.random().toString(36).substring(2, 8);
     createTab(newId, hostItem.name, hostItem.id, hostItem.color || '#3b82f6', true);
   }
 
-  function createTab(id, name, hostId = 'node01-hermes', color = '#3b82f6', activate = true) {
+  function createTab(id, name, hostId = 'node01-hermes', color = '#3b82f6', activate = true, sessionId = null) {
     if (tabs.find(t => t.id === id)) return;
 
     // Tab DOM
@@ -618,6 +849,7 @@
       id,
       name: name || 'shell',
       hostId,
+      sessionId,
       color,
       tabEl,
       titleEl,
@@ -629,7 +861,7 @@
     };
     tabs.push(tabObj);
 
-    // Windows Terminal Keyboard & Selection Handling
+    // Keyboard & Selection Handling
     term.attachCustomKeyEventHandler((e) => {
       // Ctrl + C (copy if selected, else SIGINT)
       if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
@@ -707,7 +939,13 @@
 
   function connectWs(tabObj) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${proto}//${window.location.host}/ws?id=${encodeURIComponent(tabObj.id)}&host=${encodeURIComponent(tabObj.hostId)}`;
+    let wsUrl = `${proto}//${window.location.host}/ws?id=${encodeURIComponent(tabObj.id)}`;
+    if (tabObj.sessionId) {
+      wsUrl += `&session=${encodeURIComponent(tabObj.sessionId)}`;
+    } else {
+      wsUrl += `&host=${encodeURIComponent(tabObj.hostId)}`;
+    }
+
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
     tabObj.ws = ws;
@@ -734,11 +972,7 @@
 
     ws.onclose = () => {
       if (!tabObj.closing) {
-        if (tabs.length > 1) {
-          closeTab(tabObj.id, false);
-        } else {
-          tabObj.term.write('\r\n\x1b[33m[Sesi ditamatkan. Pilih sambungan di sidebar atau klik [+]]\x1b[0m\r\n');
-        }
+        tabObj.term.write('\r\n\x1b[33m[Sesi ditamatkan. Sila pilih sambungan di tab bar atau dashboard]\x1b[0m\r\n');
       }
     };
   }
@@ -754,6 +988,7 @@
     const tabObj = tabs.find(t => t.id === id);
     if (!tabObj) return;
 
+    hideDashboard();
     activeTabId = id;
     tabs.forEach(t => {
       const isActive = (t.id === id);
@@ -787,8 +1022,7 @@
     tabs.splice(idx, 1);
 
     if (tabs.length === 0) {
-      const defaultHost = savedHosts[0] || { id: 'node01-hermes', name: 'node01 (hermes)' };
-      openTabForHost(defaultHost);
+      showDashboard();
     } else {
       if (activeTabId === id) {
         const nextIdx = Math.max(0, idx - 1);
@@ -798,6 +1032,7 @@
   }
 
   function refitActiveTerminal() {
+    if (!activeTabId) return;
     const active = tabs.find(t => t.id === activeTabId);
     if (active) {
       try {
@@ -877,18 +1112,14 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
-  // App Init
+  // App Initialization
   async function init() {
     initSidebar();
     await ensureFontLoaded();
     await fetchHosts();
 
-    // Default open first host (node01 hermes)
-    if (savedHosts.length > 0) {
-      openTabForHost(savedHosts[0]);
-    } else {
-      createTab('main', 'node01 (hermes)', 'node01-hermes', '#3b82f6', true);
-    }
+    // Default: Show Dashboard on initial start (do not auto-enter SSH shell)
+    showDashboard();
   }
 
   init();
