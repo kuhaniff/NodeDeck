@@ -62,12 +62,18 @@
   const hostList = document.getElementById('host-list');
 
   // SFTP DOM
+  const fsConnectView = document.getElementById('fs-connect-view');
+  const fsActiveView = document.getElementById('fs-active-view');
   const fsCurrentPath = document.getElementById('fs-current-path');
   const fsBtnUp = document.getElementById('fs-btn-up');
   const fsBtnRefresh = document.getElementById('fs-btn-refresh');
+  const fsBtnDisconnect = document.getElementById('fs-btn-disconnect');
   const fsBtnMkdir = document.getElementById('fs-btn-mkdir');
   const fsFileInput = document.getElementById('fs-file-input');
   const fileList = document.getElementById('file-list');
+  const fsPresetBtns = document.querySelectorAll('.fs-preset-btn');
+  const fsCustomPathForm = document.getElementById('fs-custom-path-form');
+  const fsCustomInput = document.getElementById('fs-custom-input');
 
   // Modal 1: Host Add / Edit DOM
   const modalHost = document.getElementById('modal-host');
@@ -99,8 +105,9 @@
   let tabs = [];
   let activeTabId = null;
   let savedHosts = [];
-  let currentFsPath = '/home/hermes';
-  let currentFsParent = '/home';
+  let sftpConnected = false;
+  let currentFsPath = '';
+  let currentFsParent = '';
   let deferredPrompt = null;
   let pendingDeleteAction = null;
 
@@ -176,7 +183,15 @@
       } else {
         viewHosts.classList.remove('active');
         viewFiles.classList.add('active');
-        loadFiles(currentFsPath);
+        // Manual SFTP check: do not auto-connect to hermes!
+        if (sftpConnected && currentFsPath) {
+          fsConnectView.style.display = 'none';
+          fsActiveView.style.display = 'flex';
+          loadFiles(currentFsPath);
+        } else {
+          fsConnectView.style.display = 'flex';
+          fsActiveView.style.display = 'none';
+        }
       }
     });
   });
@@ -232,6 +247,20 @@
     if (!dashHostsGrid) return;
     dashHostsGrid.innerHTML = '';
 
+    if (!savedHosts || savedHosts.length === 0) {
+      dashHostsGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 24px 16px; text-align: center; color: var(--text-dim); font-size: 13px;">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px; opacity:0.4;">
+            <rect x="2" y="2" width="20" height="8" rx="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2"/>
+          </svg>
+          <div>Tiada hos tersimpan.</div>
+          <p style="font-size:11px; margin-top:4px; opacity:0.8;">Gunakan <b>Sambungan Pantas</b> di atas atau klik <b>[+ Tambah Hos]</b> untuk menambah profil sambungan manual.</p>
+        </div>
+      `;
+      return;
+    }
+
     savedHosts.forEach(h => {
       const item = document.createElement('div');
       item.className = 'dash-host-item';
@@ -262,6 +291,21 @@
   function renderHostList(filter = '') {
     if (!hostList) return;
     hostList.innerHTML = '';
+
+    if (!savedHosts || savedHosts.length === 0) {
+      hostList.innerHTML = `
+        <div style="padding: 28px 12px; text-align: center; color: var(--text-dim); font-size: 12px;">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px; opacity:0.5;">
+            <rect x="2" y="2" width="20" height="8" rx="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2"/>
+          </svg>
+          <div>Tiada hos tersimpan</div>
+          <p style="font-size:11px; margin-top:4px; opacity:0.8;">Klik [+ Tambah Sambungan] di bawah.</p>
+        </div>
+      `;
+      return;
+    }
+
     const filtered = savedHosts.filter(h => 
       (h.name || '').toLowerCase().includes(filter.toLowerCase()) || 
       (h.host || '').toLowerCase().includes(filter.toLowerCase()) ||
@@ -319,23 +363,26 @@
   function renderHostDropdown() {
     if (!hostDropdown) return;
     hostDropdown.innerHTML = '';
-    savedHosts.forEach(h => {
-      const item = document.createElement('div');
-      item.className = 'dropdown-item';
-      item.innerHTML = `
-        <span class="tab-badge" style="background:${h.color || '#3b82f6'}"></span>
-        <span>${escapeHtml(h.name)}</span>
-      `;
-      item.addEventListener('click', () => {
-        hostDropdown.classList.remove('show');
-        openTabForHost(h);
-      });
-      hostDropdown.appendChild(item);
-    });
 
-    const divider = document.createElement('div');
-    divider.className = 'dropdown-divider';
-    hostDropdown.appendChild(divider);
+    if (savedHosts && savedHosts.length > 0) {
+      savedHosts.forEach(h => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.innerHTML = `
+          <span class="tab-badge" style="background:${h.color || '#3b82f6'}"></span>
+          <span>${escapeHtml(h.name)}</span>
+        `;
+        item.addEventListener('click', () => {
+          hostDropdown.classList.remove('show');
+          openTabForHost(h);
+        });
+        hostDropdown.appendChild(item);
+      });
+
+      const divider = document.createElement('div');
+      divider.className = 'dropdown-divider';
+      hostDropdown.appendChild(divider);
+    }
 
     const addOpt = document.createElement('div');
     addOpt.className = 'dropdown-item';
@@ -542,14 +589,54 @@
     }
   });
 
-  // --- 4. SFTP / File Explorer ---
-  async function loadFiles(path = '/home/hermes') {
+  // --- 4. SFTP / File Explorer (Manual Connection Only) ---
+  function connectSftp(path) {
+    if (!path || !path.trim()) return;
+    currentFsPath = path.trim();
+    sftpConnected = true;
+    fsConnectView.style.display = 'none';
+    fsActiveView.style.display = 'flex';
+    loadFiles(currentFsPath);
+  }
+
+  function disconnectSftp() {
+    sftpConnected = false;
+    currentFsPath = '';
+    currentFsParent = '';
+    fsActiveView.style.display = 'none';
+    fsConnectView.style.display = 'flex';
+  }
+
+  if (fsBtnDisconnect) {
+    fsBtnDisconnect.addEventListener('click', (e) => {
+      e.preventDefault();
+      disconnectSftp();
+    });
+  }
+
+  fsPresetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.path;
+      if (p) connectSftp(p);
+    });
+  });
+
+  if (fsCustomPathForm) {
+    fsCustomPathForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const p = fsCustomInput.value.trim();
+      if (p) connectSftp(p);
+    });
+  }
+
+  async function loadFiles(path) {
+    if (!path) return;
     try {
       const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
       if (res.ok) {
         const data = await res.json();
-        currentFsPath = data.current_path;
-        currentFsParent = data.parent_path;
+        currentFsPath = data.current;
+        currentFsParent = data.parent;
         fsCurrentPath.textContent = currentFsPath;
         fsCurrentPath.title = currentFsPath;
         renderFiles(data.items);
@@ -688,12 +775,12 @@
   });
 
   fsBtnRefresh.addEventListener('click', () => {
-    loadFiles(currentFsPath);
+    if (currentFsPath) loadFiles(currentFsPath);
   });
 
   // Folder creation via custom modal
   fsBtnMkdir.addEventListener('click', () => {
-    mkdirParentPath.textContent = currentFsPath;
+    mkdirParentPath.textContent = currentFsPath || '/';
     mkdirInputName.value = '';
     modalMkdir.classList.add('show');
     setTimeout(() => mkdirInputName.focus(), 50);
@@ -702,7 +789,7 @@
   formMkdir.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = mkdirInputName.value.trim();
-    if (!name) return;
+    if (!name || !currentFsPath) return;
     const targetDir = currentFsPath.replace(/\/+$/, '') + '/' + name;
     try {
       const res = await fetch(`/api/fs/mkdir?path=${encodeURIComponent(targetDir)}`, { method: 'POST' });
@@ -722,12 +809,13 @@
 
   fsFileInput.addEventListener('change', async (e) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !currentFsPath) return;
     await uploadFiles(files);
     fsFileInput.value = '';
   });
 
   async function uploadFiles(fileListToUpload) {
+    if (!currentFsPath) return;
     const formData = new FormData();
     for (let i = 0; i < fileListToUpload.length; i++) {
       formData.append('files', fileListToUpload[i]);
@@ -760,7 +848,7 @@
   viewFiles.addEventListener('drop', async (e) => {
     e.preventDefault();
     viewFiles.style.borderColor = '';
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0 && currentFsPath) {
       await uploadFiles(e.dataTransfer.files);
     }
   });
@@ -771,7 +859,7 @@
     createTab(newId, hostItem.name, hostItem.id, hostItem.color || '#3b82f6', true);
   }
 
-  function createTab(id, name, hostId = 'node01-hermes', color = '#3b82f6', activate = true, sessionId = null) {
+  function createTab(id, name, hostId = '', color = '#3b82f6', activate = true, sessionId = null) {
     if (tabs.find(t => t.id === id)) return;
 
     // Tab DOM

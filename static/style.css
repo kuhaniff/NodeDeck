@@ -1187,3 +1187,87 @@ html, body {
     padding: 16px 12px;
   }
 }
+
+/* SFTP Manual Connect Panel */
+.fs-connect-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  gap: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.fs-connect-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.fs-connect-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fs-connect-header h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.fs-connect-header p {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.fs-preset-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fs-preset-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: #151922;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+  text-align: left;
+}
+
+.fs-preset-btn:hover {
+  background-color: #1e2432;
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #fff;
+}
+
+.fs-custom-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.fs-custom-form label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
