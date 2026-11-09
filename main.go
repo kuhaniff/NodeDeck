@@ -472,6 +472,7 @@ func main() {
 			sshArgs := []string{
 				"-o", "StrictHostKeyChecking=no",
 				"-o", "UserKnownHostsFile=/dev/null",
+				"-o", "LogLevel=ERROR",
 				"-p", strconv.Itoa(portNum),
 			}
 
