@@ -522,8 +522,9 @@ body.resizing-sidebar #sidebar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   height: 34px;
+  padding: 0 16px;
   background-color: var(--accent-blue);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -531,6 +532,8 @@ body.resizing-sidebar #sidebar {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
   transition: all 0.15s ease;
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
 }
@@ -540,8 +543,21 @@ body.resizing-sidebar #sidebar {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
+.btn-primary:active {
+  transform: translateY(1px);
+}
+
 .btn-primary.full-width {
   width: 100%;
+}
+
+.btn-primary.btn-sm,
+.btn-sm {
+  height: 28px !important;
+  padding: 0 12px !important;
+  font-size: 11px !important;
+  gap: 5px !important;
+  border-radius: 5px !important;
 }
 
 .btn-secondary {
@@ -1146,8 +1162,18 @@ body.resizing-sidebar #sidebar {
 
 .quick-form-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  margin-top: 4px;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.quick-form-actions button[type="submit"] {
+  height: 38px;
+  padding: 0 20px;
+  font-size: 13px;
+  gap: 8px;
+  border-radius: 8px;
 }
 
 .dash-hosts-grid {
@@ -1501,4 +1527,56 @@ body.resizing-sidebar #sidebar {
   padding: 4px 10px;
   font-size: 11px;
   border-radius: 4px;
+}
+
+/* Theme Dropdown Menu */
+.theme-menu {
+  min-width: 210px;
+  right: 0;
+  left: auto;
+  padding: 6px;
+}
+
+.theme-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 12px;
+  color: var(--text-main);
+  user-select: none;
+}
+
+.theme-item:hover {
+  background-color: var(--bg-hover);
+  color: #fff;
+}
+
+.theme-item.active {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.theme-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-preview {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.theme-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
 }

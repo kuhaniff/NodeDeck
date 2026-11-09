@@ -2,30 +2,161 @@
 (function() {
   'use strict';
 
-  // Professional Slate / OLED Palette
-  const THEME = {
-    background: '#0a0c10',
-    foreground: '#d8dce4',
-    cursor: '#3b82f6',
-    cursorAccent: '#0a0c10',
-    selectionBackground: 'rgba(59, 130, 246, 0.35)',
-    black: '#15161e',
-    red: '#f7768e',
-    green: '#10b981',
-    yellow: '#e0af68',
-    blue: '#3b82f6',
-    magenta: '#bb9af7',
-    cyan: '#7dcfff',
-    white: '#a9b1d6',
-    brightBlack: '#414868',
-    brightRed: '#f7768e',
-    brightGreen: '#10b981',
-    brightYellow: '#e0af68',
-    brightBlue: '#60a5fa',
-    brightMagenta: '#bb9af7',
-    brightCyan: '#7dcfff',
-    brightWhite: '#c0caf5'
+  // Terminal Themes (including Windows Terminal specs: coolnight, CutiePro, Fahrenheit, Monokai Remastered)
+  const THEMES = {
+    'nodedeck': {
+      id: 'nodedeck',
+      name: 'NodeDeck Slate',
+      shortName: 'Slate',
+      swatch: ['#0a0c10', '#3b82f6', '#10b981', '#f7768e'],
+      xterm: {
+        background: '#0a0c10',
+        foreground: '#d8dce4',
+        cursor: '#3b82f6',
+        cursorAccent: '#0a0c10',
+        selectionBackground: 'rgba(59, 130, 246, 0.35)',
+        black: '#15161e',
+        red: '#f7768e',
+        green: '#10b981',
+        yellow: '#e0af68',
+        blue: '#3b82f6',
+        magenta: '#bb9af7',
+        cyan: '#7dcfff',
+        white: '#a9b1d6',
+        brightBlack: '#414868',
+        brightRed: '#f7768e',
+        brightGreen: '#10b981',
+        brightYellow: '#e0af68',
+        brightBlue: '#60a5fa',
+        brightMagenta: '#bb9af7',
+        brightCyan: '#7dcfff',
+        brightWhite: '#c0caf5'
+      }
+    },
+    'coolnight': {
+      id: 'coolnight',
+      name: 'Coolnight',
+      shortName: 'Coolnight',
+      swatch: ['#010B17', '#1376F8', '#52FFCF', '#FF5DD4'],
+      xterm: {
+        background: '#010B17',
+        foreground: '#EBDDF4',
+        cursor: '#52FFCF',
+        cursorAccent: '#010B17',
+        selectionBackground: 'rgba(56, 255, 156, 0.3)',
+        black: '#0B3B61',
+        red: '#FF3A3A',
+        green: '#52FFCF',
+        yellow: '#FFF383',
+        blue: '#1376F8',
+        magenta: '#AE81FF',
+        cyan: '#FF5DD4',
+        white: '#15FCA2',
+        brightBlack: '#62686C',
+        brightRed: '#FF54B0',
+        brightGreen: '#73FFD8',
+        brightYellow: '#FCF4AD',
+        brightBlue: '#378DFE',
+        brightMagenta: '#8F4673',
+        brightCyan: '#FF69D7',
+        brightWhite: '#5FFBBE'
+      }
+    },
+    'cutiepro': {
+      id: 'cutiepro',
+      name: 'CutiePro',
+      shortName: 'CutiePro',
+      swatch: ['#181818', '#42D9C5', '#BEC975', '#F56E7F'],
+      xterm: {
+        background: '#181818',
+        foreground: '#D5D0C9',
+        cursor: '#EFC4CD',
+        cursorAccent: '#181818',
+        selectionBackground: 'rgba(66, 217, 197, 0.3)',
+        black: '#000000',
+        red: '#F56E7F',
+        green: '#BEC975',
+        yellow: '#F58669',
+        blue: '#42D9C5',
+        magenta: '#D286B7',
+        cyan: '#37CB8A',
+        white: '#D5C3C3',
+        brightBlack: '#88847F',
+        brightRed: '#E5A1A3',
+        brightGreen: '#E8D6A7',
+        brightYellow: '#F1BB79',
+        brightBlue: '#80C5DE',
+        brightMagenta: '#B294BB',
+        brightCyan: '#9DCCBB',
+        brightWhite: '#FFFFFF'
+      }
+    },
+    'fahrenheit': {
+      id: 'fahrenheit',
+      name: 'Fahrenheit',
+      shortName: 'Fahrenheit',
+      swatch: ['#191919', '#5E8D87', '#6CA64D', '#D95454'],
+      xterm: {
+        background: '#191919',
+        foreground: '#A6A6A6',
+        cursor: '#E5BE5E',
+        cursorAccent: '#191919',
+        selectionBackground: 'rgba(112, 180, 172, 0.3)',
+        black: '#262626',
+        red: '#D95454',
+        green: '#6CA64D',
+        yellow: '#E5BE5E',
+        blue: '#5E8D87',
+        magenta: '#B25E7B',
+        cyan: '#70B4AC',
+        white: '#D9D9D9',
+        brightBlack: '#555555',
+        brightRed: '#FF6B6B',
+        brightGreen: '#8CC864',
+        brightYellow: '#FFD166',
+        brightBlue: '#70B4AC',
+        brightPurple: '#D47395',
+        brightMagenta: '#D47395',
+        brightCyan: '#95D1C9',
+        brightWhite: '#E5E5E5'
+      }
+    },
+    'monokai-remastered': {
+      id: 'monokai-remastered',
+      name: 'Monokai Remastered',
+      shortName: 'Monokai',
+      swatch: ['#1a1a1a', '#9d65ff', '#98e024', '#f4005f'],
+      xterm: {
+        background: '#1a1a1a',
+        foreground: '#c4c5b5',
+        cursor: '#fd971f',
+        cursorAccent: '#1a1a1a',
+        selectionBackground: 'rgba(98, 94, 76, 0.45)',
+        black: '#1a1a1a',
+        red: '#f4005f',
+        green: '#98e024',
+        yellow: '#fd971f',
+        blue: '#9d65ff',
+        magenta: '#f4005f',
+        cyan: '#58d1eb',
+        white: '#c4c5b5',
+        brightBlack: '#625e4c',
+        brightRed: '#f4005f',
+        brightGreen: '#98e024',
+        brightYellow: '#e0d561',
+        brightBlue: '#9d65ff',
+        brightMagenta: '#f4005f',
+        brightCyan: '#58d1eb',
+        brightWhite: '#f6f6ef'
+      }
+    }
   };
+
+  let activeThemeId = 'nodedeck';
+
+  function getActiveTheme() {
+    return THEMES[activeThemeId] || THEMES['nodedeck'];
+  }
 
   // DOM Elements - Header & Global
   const tabsContainer = document.getElementById('tabs-container');
@@ -38,6 +169,9 @@
   const pwaInstallBtn = document.getElementById('pwa-install-btn');
   const btnQuickAddHost = document.getElementById('btn-quick-add-host');
   const btnAddHost = document.getElementById('btn-add-host');
+  const btnThemeSelector = document.getElementById('btn-theme-selector');
+  const themeDropdown = document.getElementById('theme-dropdown');
+  const themeActiveLabel = document.getElementById('theme-active-label');
 
   // Dashboard DOM
   const dashboardView = document.getElementById('dashboard-view');
@@ -53,6 +187,8 @@
   const qcGroupPassword = document.getElementById('qc-group-password');
   const qcGroupKey = document.getElementById('qc-group-key');
   const qcBtnEye = document.getElementById('qc-btn-eye');
+  const qcStatusMsg = document.getElementById('qc-status-msg');
+  const qcBtnSubmit = document.getElementById('qc-btn-submit');
 
   // Sidebar DOM
   const navTabs = document.querySelectorAll('.sidebar-nav .nav-tab');
@@ -143,6 +279,81 @@
       }
     } catch (e) {
       console.warn('Font loading wait skipped:', e);
+    }
+  }
+
+  // --- 0. Theme Management ---
+  function applyTheme(themeId) {
+    if (!THEMES[themeId]) themeId = 'nodedeck';
+    activeThemeId = themeId;
+    const themeDef = THEMES[themeId];
+
+    try {
+      localStorage.setItem('nodedeck_theme', themeId);
+    } catch (e) {}
+
+    if (themeActiveLabel) {
+      themeActiveLabel.textContent = themeDef.shortName;
+    }
+
+    tabs.forEach(t => {
+      if (t.term) {
+        t.term.options.theme = themeDef.xterm;
+      }
+      if (t.panelEl) {
+        t.panelEl.style.backgroundColor = themeDef.xterm.background;
+      }
+    });
+
+    if (terminalContainer) {
+      terminalContainer.style.backgroundColor = themeDef.xterm.background;
+    }
+
+    renderThemeDropdown();
+  }
+
+  function renderThemeDropdown() {
+    if (!themeDropdown) return;
+    themeDropdown.innerHTML = '';
+
+    Object.values(THEMES).forEach(th => {
+      const item = document.createElement('div');
+      item.className = 'theme-item' + (th.id === activeThemeId ? ' active' : '');
+      const dotsHtml = th.swatch.map(c => `<span class="theme-dot" style="background:${c};"></span>`).join('');
+      item.innerHTML = `
+        <div class="theme-item-left">
+          <div class="theme-preview">${dotsHtml}</div>
+          <span>${escapeHtml(th.name)}</span>
+        </div>
+        ${th.id === activeThemeId ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#60a5fa" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+      `;
+
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyTheme(th.id);
+        themeDropdown.classList.remove('show');
+      });
+
+      themeDropdown.appendChild(item);
+    });
+  }
+
+  function initThemes() {
+    try {
+      const saved = localStorage.getItem('nodedeck_theme');
+      if (saved && THEMES[saved]) {
+        activeThemeId = saved;
+      }
+    } catch (e) {}
+
+    applyTheme(activeThemeId);
+
+    if (btnThemeSelector && themeDropdown) {
+      btnThemeSelector.addEventListener('click', (e) => {
+        e.stopPropagation();
+        themeDropdown.classList.toggle('show');
+        if (hostDropdown) hostDropdown.classList.remove('show');
+      });
     }
   }
 
@@ -520,7 +731,28 @@
       const password = qcPassword ? qcPassword.value : '';
       const keyPath = qcKeypath ? qcKeypath.value.trim() : '';
 
-      if (!host || !user) return;
+      if (qcStatusMsg) {
+        qcStatusMsg.style.display = 'none';
+        qcStatusMsg.textContent = '';
+      }
+
+      if (!host) {
+        qcHost.focus();
+        if (qcStatusMsg) {
+          qcStatusMsg.textContent = 'Host / IP address is required';
+          qcStatusMsg.style.display = 'inline-block';
+        }
+        return;
+      }
+
+      if (!user) {
+        qcUser.focus();
+        if (qcStatusMsg) {
+          qcStatusMsg.textContent = 'Username is required';
+          qcStatusMsg.style.display = 'inline-block';
+        }
+        return;
+      }
 
       const payload = {
         name: `${user}@${host}`,
@@ -534,6 +766,16 @@
         color: '#3b82f6'
       };
 
+      const btnSubmit = qcBtnSubmit || formQuickConnect.querySelector('button[type="submit"]');
+      const originalHtml = btnSubmit ? btnSubmit.innerHTML : '';
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `
+          <div class="spinner" style="width:13px; height:13px; border-width:2px; margin:0;"></div>
+          <span>Connecting...</span>
+        `;
+      }
+
       try {
         const res = await fetch('/api/session/create', {
           method: 'POST',
@@ -545,10 +787,26 @@
           const newId = 'tab-' + Math.random().toString(36).substring(2, 8);
           createTab(newId, payload.name, payload.name, '#3b82f6', true, data.session_id);
         } else {
-          alert('Failed to start session: ' + (await res.text()));
+          const errText = await res.text();
+          if (qcStatusMsg) {
+            qcStatusMsg.textContent = errText || 'Failed to start session';
+            qcStatusMsg.style.display = 'inline-block';
+          } else {
+            alert('Failed to start session: ' + errText);
+          }
         }
       } catch (err) {
-        alert('Connection error: ' + err.message);
+        if (qcStatusMsg) {
+          qcStatusMsg.textContent = err.message || 'Connection error';
+          qcStatusMsg.style.display = 'inline-block';
+        } else {
+          alert('Connection error: ' + err.message);
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = originalHtml;
+        }
       }
     });
   }
@@ -653,7 +911,8 @@
 
   window.addEventListener('click', (e) => {
     if (!e.target.closest('.dropdown-wrapper')) {
-      hostDropdown.classList.remove('show');
+      if (hostDropdown) hostDropdown.classList.remove('show');
+      if (themeDropdown) themeDropdown.classList.remove('show');
     }
   });
 
@@ -969,7 +1228,21 @@
       editorStatus.textContent = 'Saving...';
       editorStatus.style.color = '#3b82f6';
     }
-    if (editorBtnSave) editorBtnSave.disabled = true;
+    const originalSaveHtml = `
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      <span>Save</span>
+    `;
+    if (editorBtnSave) {
+      editorBtnSave.disabled = true;
+      editorBtnSave.innerHTML = `
+        <div class="spinner" style="width:11px; height:11px; border-width:1.5px; margin:0;"></div>
+        <span>Saving...</span>
+      `;
+    }
 
     try {
       const res = await fetch('/api/fs/save', {
@@ -989,11 +1262,22 @@
           editorStatus.textContent = 'Saved';
           editorStatus.style.color = '#10b981';
         }
+        if (editorBtnSave) {
+          editorBtnSave.innerHTML = `
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span>Saved</span>
+          `;
+        }
         setTimeout(() => {
           if (!isEditorDirty && editorStatus && editorStatus.textContent === 'Saved') {
             editorStatus.textContent = 'Ready';
           }
-        }, 2000);
+          if (editorBtnSave) {
+            editorBtnSave.innerHTML = originalSaveHtml;
+          }
+        }, 1500);
         if (currentFsPath) loadFiles(currentFsPath, true);
       } else {
         const errText = await res.text();
@@ -1001,11 +1285,17 @@
           editorStatus.textContent = 'Save failed: ' + errText;
           editorStatus.style.color = '#ef4444';
         }
+        if (editorBtnSave) {
+          editorBtnSave.innerHTML = originalSaveHtml;
+        }
       }
     } catch (err) {
       if (editorStatus) {
         editorStatus.textContent = 'Save error: ' + err.message;
         editorStatus.style.color = '#ef4444';
+      }
+      if (editorBtnSave) {
+        editorBtnSave.innerHTML = originalSaveHtml;
       }
     } finally {
       if (editorBtnSave) editorBtnSave.disabled = false;
@@ -1192,11 +1482,12 @@
     const panelEl = document.createElement('div');
     panelEl.className = 'terminal-panel';
     panelEl.dataset.id = id;
+    panelEl.style.backgroundColor = getActiveTheme().xterm.background;
     terminalContainer.appendChild(panelEl);
 
     // Xterm Instance with Native Buffer & Scrollback
     const term = new Terminal({
-      theme: THEME,
+      theme: getActiveTheme().xterm,
       fontFamily: "'JetBrainsMono Nerd Font', 'Cascadia Code', monospace",
       fontSize: 14,
       lineHeight: 1.25,
@@ -1541,6 +1832,7 @@
   // App Initialization
   async function init() {
     initSidebar();
+    initThemes();
     initFileEditor();
     await ensureFontLoaded();
     await fetchHosts();
