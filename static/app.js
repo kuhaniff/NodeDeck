@@ -263,6 +263,53 @@
   let currentFsParent = '';
   let deferredPrompt = null;
   let pendingDeleteAction = null;
+  let ctrlArmed = false;
+  let termFontSize = 14;
+  try {
+    const savedFs = parseInt(localStorage.getItem('nodedeck_font_size'), 10);
+    if (savedFs >= 9 && savedFs <= 28) termFontSize = savedFs;
+  } catch (e) {}
+
+  // --- UX helpers: toast notifications (replaces blocking alert()) ---
+  function toast(message, type) {
+    type = type || 'error';
+    let stack = document.getElementById('toast-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'toast-stack';
+      stack.setAttribute('role', 'status');
+      stack.setAttribute('aria-live', 'polite');
+      document.body.appendChild(stack);
+    }
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    const msg = document.createElement('span');
+    msg.textContent = String(message);
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'toast-close';
+    x.setAttribute('aria-label', 'Dismiss');
+    x.innerHTML = '&times;';
+    el.appendChild(msg);
+    el.appendChild(x);
+    stack.appendChild(el);
+    const remove = () => {
+      el.classList.add('leaving');
+      setTimeout(() => el.remove(), 180);
+    };
+    x.addEventListener('click', remove);
+    setTimeout(remove, type === 'error' ? 6500 : 3500);
+  }
+
+  function countSessionsForHost(hostId) {
+    return tabs.filter(t => t.hostId === hostId && !t.disconnected).length;
+  }
+
+  function refreshHostSessionBadges() {
+    renderHostList(hostSearch ? hostSearch.value : '');
+    renderDashboardHosts();
+  }
+
   let currentEditingPath = '';
   let originalEditorContent = '';
   let isEditorDirty = false;
@@ -291,6 +338,33 @@
     try {
       localStorage.setItem('nodedeck_theme', themeId);
     } catch (e) {}
+
+    // Apply full-web theme variables across the whole app
+    const root = document.documentElement;
+    const xt = themeDef.xterm;
+    const isSlate = (themeId === 'nodedeck');
+    
+    // Background tokens
+    root.style.setProperty('--bg-app', xt.background);
+    root.style.setProperty('--bg-header', isSlate ? '#0e1117' : xt.black || xt.background);
+    root.style.setProperty('--bg-sidebar', isSlate ? '#11141c' : xt.background);
+    root.style.setProperty('--bg-card', isSlate ? '#151922' : (xt.brightBlack || '#1a1f2c'));
+    root.style.setProperty('--bg-card-hover', isSlate ? '#1c2230' : (xt.selectionBackground ? xt.brightBlack : '#252c3d'));
+    root.style.setProperty('--bg-input', isSlate ? '#0a0d13' : xt.background);
+    
+    // Text tokens
+    root.style.setProperty('--text-main', xt.foreground || '#f1f5f9');
+    root.style.setProperty('--text-muted', xt.white || '#94a3b8');
+    root.style.setProperty('--text-dim', xt.brightBlack || '#64748b');
+    
+    // Accent tokens
+    const primaryAccent = xt.blue || xt.cursor || '#3b82f6';
+    root.style.setProperty('--accent-blue', primaryAccent);
+    root.style.setProperty('--border-focus', primaryAccent);
+    if (xt.red) root.style.setProperty('--accent-red', xt.red);
+    if (xt.green) root.style.setProperty('--accent-green', xt.green);
+    if (xt.yellow) root.style.setProperty('--accent-amber', xt.yellow);
+    if (xt.magenta) root.style.setProperty('--accent-purple', xt.magenta);
 
     if (themeActiveLabel) {
       themeActiveLabel.textContent = themeDef.shortName;
@@ -359,6 +433,14 @@
 
   // --- 1. Sidebar Management ---
   function setSidebarOpen(open) {
+    let backdrop = document.getElementById('sidebar-backdrop');
+    if (!backdrop) {
+      backdrop = document.createElement('div');
+      backdrop.id = 'sidebar-backdrop';
+      backdrop.addEventListener('click', () => setSidebarOpen(false));
+      document.getElementById('app-body').appendChild(backdrop);
+    }
+    backdrop.classList.toggle('show', open && window.innerWidth <= 768);
     if (open) {
       sidebar.classList.remove('collapsed');
       if (btnToggleSidebar) btnToggleSidebar.classList.add('active');
@@ -482,6 +564,7 @@
       t.panelEl.classList.remove('active');
     });
 
+    document.body.classList.remove('term-active');
     if (dashboardView) {
       dashboardView.style.display = 'block';
     }
@@ -491,6 +574,7 @@
   }
 
   function hideDashboard() {
+    document.body.classList.add('term-active');
     if (dashboardView) {
       dashboardView.style.display = 'none';
     }
@@ -542,24 +626,45 @@
     savedHosts.forEach(h => {
       const item = document.createElement('div');
       item.className = 'dash-host-item';
+      item.tabIndex = 0;
+      item.setAttribute('role', 'button');
+      item.setAttribute('aria-label', 'Connect to ' + (h.name || 'host'));
       const color = h.color || '#3b82f6';
       const meta = h.type === 'local' ? `Local Shell (${h.user})` : `${h.user}@${h.host}:${h.port || 22}`;
+      const live = countSessionsForHost(h.id);
 
       item.innerHTML = `
         <span class="host-status-dot" style="background:${color}; color:${color}"></span>
         <div class="host-info">
-          <div class="host-name">${escapeHtml(h.name)}</div>
+          <div class="host-name">${escapeHtml(h.name)}${live ? `<span class="live-pill" title="${live} open session(s)">${live} live</span>` : ''}</div>
           <div class="host-meta">${escapeHtml(meta)}</div>
         </div>
-        <button class="dash-connect-btn" title="Connect Session">
+        <button type="button" class="dash-edit-btn" title="Edit connection" aria-label="Edit connection">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+          </svg>
+        </button>
+        <button type="button" class="dash-connect-btn" title="Connect Session" aria-label="Connect">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
         </button>
       `;
 
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.dash-edit-btn')) {
+          e.stopPropagation();
+          openEditHostModal(h);
+          return;
+        }
         openTabForHost(h);
+      });
+      item.addEventListener('keydown', (e) => {
+        if (e.target !== item) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openTabForHost(h);
+        }
       });
 
       dashHostsGrid.appendChild(item);
@@ -606,17 +711,26 @@
     filtered.forEach(h => {
       const card = document.createElement('div');
       card.className = 'host-card';
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', 'Connect to ' + (h.name || 'host'));
       const meta = h.type === 'local' ? `Local Shell (${h.user})` : `${h.user}@${h.host}:${h.port || 22}`;
       const color = h.color || '#3b82f6';
-      
+      const live = countSessionsForHost(h.id);
+
       card.innerHTML = `
         <span class="host-status-dot" style="background:${color}; color:${color}"></span>
         <div class="host-info">
-          <div class="host-name">${escapeHtml(h.name)}</div>
+          <div class="host-name">${escapeHtml(h.name)}${live ? `<span class="live-pill" title="${live} open session(s)">${live}</span>` : ''}</div>
           <div class="host-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="host-actions">
-          <button class="host-action-btn host-del" title="Delete Connection">
+          <button type="button" class="host-action-btn host-edit" title="Edit Connection" aria-label="Edit connection">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+            </svg>
+          </button>
+          <button type="button" class="host-action-btn host-del" title="Delete Connection" aria-label="Delete connection">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -629,7 +743,18 @@
         if (e.target.closest('.host-del')) {
           e.stopPropagation();
           promptDeleteHost(h);
+        } else if (e.target.closest('.host-edit')) {
+          e.stopPropagation();
+          openEditHostModal(h);
         } else {
+          openTabForHost(h);
+          if (window.innerWidth <= 768) setSidebarOpen(false);
+        }
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.target !== card) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
           openTabForHost(h);
         }
       });
@@ -685,7 +810,7 @@
         await fetch(`/api/hosts?id=${encodeURIComponent(hostItem.id)}`, { method: 'DELETE' });
         await fetchHosts();
       } catch (err) {
-        alert('Failed to delete host: ' + err.message);
+        toast('Failed to delete host: ' + err.message);
       }
     });
   }
@@ -792,7 +917,7 @@
             qcStatusMsg.textContent = errText || 'Failed to start session';
             qcStatusMsg.style.display = 'inline-block';
           } else {
-            alert('Failed to start session: ' + errText);
+            toast('Failed to start session: ' + errText);
           }
         }
       } catch (err) {
@@ -800,7 +925,7 @@
           qcStatusMsg.textContent = err.message || 'Connection error';
           qcStatusMsg.style.display = 'inline-block';
         } else {
-          alert('Connection error: ' + err.message);
+          toast('Connection error: ' + err.message);
         }
       } finally {
         if (btnSubmit) {
@@ -818,7 +943,51 @@
     document.getElementById('modal-host-title').textContent = 'Add Host Connection';
     updateModalFormFields();
     modalHost.classList.add('show');
+    setTimeout(() => {
+      const first = document.getElementById('host-input-name');
+      if (first) first.focus();
+    }, 40);
   }
+
+  function openEditHostModal(h) {
+    formHost.reset();
+    document.getElementById('host-input-id').value = h.id || '';
+    document.getElementById('modal-host-title').textContent = 'Edit Host Connection';
+    document.getElementById('host-input-name').value = h.name || '';
+    hostInputType.value = h.type === 'local' ? 'local' : 'ssh';
+    document.getElementById('host-input-address').value = h.type === 'local' ? '' : (h.host || '');
+    document.getElementById('host-input-user').value = h.user || '';
+    document.getElementById('host-input-port').value = h.port || 22;
+    hostInputAuth.value = h.auth || 'password';
+    if (hostInputPassword) hostInputPassword.value = h.password || '';
+    document.getElementById('host-input-keypath').value = h.key_path || '';
+    const radios = document.querySelectorAll('input[name="host-color"]');
+    let matched = false;
+    radios.forEach(r => {
+      r.checked = (r.value === (h.color || '#3b82f6'));
+      if (r.checked) matched = true;
+    });
+    if (!matched && radios[0]) radios[0].checked = true;
+    updateModalFormFields();
+    modalHost.classList.add('show');
+    setTimeout(() => document.getElementById('host-input-name').focus(), 40);
+  }
+
+  // Close any open modal with Esc, or by clicking the dimmed backdrop
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    [modalHost, modalMkdir, modalDelete].forEach(m => {
+      if (m && m.classList.contains('show')) m.classList.remove('show');
+    });
+    if (hostDropdown) hostDropdown.classList.remove('show');
+    if (themeDropdown) themeDropdown.classList.remove('show');
+  });
+  [modalHost, modalMkdir].forEach(m => {
+    if (!m) return;
+    m.addEventListener('mousedown', (e) => {
+      if (e.target === m) m.classList.remove('show');
+    });
+  });
 
   function updateModalFormFields() {
     const type = hostInputType.value;
@@ -885,11 +1054,12 @@
       if (res.ok) {
         modalHost.classList.remove('show');
         await fetchHosts();
+        toast(id ? 'Connection updated' : 'Connection saved', 'success');
       } else {
-        alert('Failed to save connection: ' + (await res.text()));
+        toast('Failed to save connection: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Error saving host: ' + err.message);
+      toast('Error saving host: ' + err.message);
     }
   });
 
@@ -1122,10 +1292,10 @@
           loadFiles(currentFsPath, true);
         } else {
           const err = await res.text();
-          alert('Failed to delete: ' + err);
+          toast('Failed to delete: ' + err);
         }
       } catch (err) {
-        alert('Error deleting item: ' + err.message);
+        toast('Error deleting item: ' + err.message);
       }
     });
   }
@@ -1390,10 +1560,10 @@
         modalMkdir.classList.remove('show');
         loadFiles(currentFsPath);
       } else {
-        alert('Failed to create folder: ' + (await res.text()));
+        toast('Failed to create folder: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Error creating folder: ' + err.message);
+      toast('Error creating folder: ' + err.message);
     }
   });
 
@@ -1421,10 +1591,10 @@
       if (res.ok) {
         loadFiles(currentFsPath);
       } else {
-        alert('Upload failed: ' + (await res.text()));
+        toast('Upload failed: ' + (await res.text()));
       }
     } catch (err) {
-      alert('Upload error: ' + err.message);
+      toast('Upload error: ' + err.message);
     }
   }
 
@@ -1489,7 +1659,7 @@
     const term = new Terminal({
       theme: getActiveTheme().xterm,
       fontFamily: "'JetBrainsMono Nerd Font', 'Cascadia Code', monospace",
-      fontSize: 14,
+      fontSize: termFontSize,
       lineHeight: 1.25,
       cursorBlink: true,
       cursorStyle: 'block',
@@ -1539,9 +1709,15 @@
       term,
       fitAddon,
       ws: null,
+      dataSub: null,
+      status: 'connecting',
+      disconnected: false,
       closing: false
     };
     tabs.push(tabObj);
+    tabEl.classList.add('is-connecting');
+    tabEl.setAttribute('role', 'tab');
+    tabEl.title = name || 'shell';
 
     // Keyboard & Selection Handling
     term.attachCustomKeyEventHandler((e) => {
@@ -1614,6 +1790,49 @@
       }
     });
 
+    // Middle-click closes a tab (browser-style)
+    tabEl.addEventListener('auxclick', (e) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        closeTab(id);
+      }
+    });
+
+    // Double-click a tab to rename it inline
+    tabEl.addEventListener('dblclick', (e) => {
+      if (e.target === closeEl) return;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'tab-rename-input';
+      input.value = tabObj.name;
+      input.maxLength = 40;
+      titleEl.style.display = 'none';
+      tabEl.insertBefore(input, closeEl);
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = (commit) => {
+        if (done) return;
+        done = true;
+        const v = input.value.trim();
+        if (commit && v) {
+          tabObj.name = v;
+          titleEl.textContent = v;
+          tabEl.title = v;
+        }
+        input.remove();
+        titleEl.style.display = '';
+        if (tabObj.term) tabObj.term.focus();
+      };
+      input.addEventListener('keydown', (ev) => {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') finish(true);
+        else if (ev.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('click', (ev) => ev.stopPropagation());
+    });
+
     if (activate) {
       switchTab(id);
     }
@@ -1638,7 +1857,6 @@
     btnReconnect.addEventListener('click', (e) => {
       e.stopPropagation();
       bar.remove();
-      tabObj.term.reset();
       connectWs(tabObj);
     });
     btnClose.addEventListener('click', (e) => {
@@ -1654,6 +1872,11 @@
       if (existingBar) existingBar.remove();
     }
 
+    if (tabObj.pingInterval) {
+      clearInterval(tabObj.pingInterval);
+      tabObj.pingInterval = null;
+    }
+
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl = `${proto}//${window.location.host}/ws?id=${encodeURIComponent(tabObj.id)}`;
     if (tabObj.sessionId) {
@@ -1666,32 +1889,119 @@
     ws.binaryType = 'arraybuffer';
     tabObj.ws = ws;
 
+    setTabStatus(tabObj, 'connecting');
+
     ws.onopen = () => {
       tabObj.fitAddon.fit();
       sendResize(tabObj);
       tabObj.term.focus();
+
+      // Keepalive heartbeat every 25s (prevents Cloudflare Tunnel & idle drop)
+      tabObj.pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 25000);
     };
 
     ws.onmessage = (evt) => {
-      if (evt.data instanceof ArrayBuffer) {
+      if (tabObj.status !== 'connected') setTabStatus(tabObj, 'connected');
+      if (typeof evt.data === 'string') {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === 'pong') return; // Heartbeat ack
+        } catch (e) {}
+        tabObj.term.write(evt.data);
+      } else if (evt.data instanceof ArrayBuffer) {
         tabObj.term.write(new Uint8Array(evt.data));
       } else {
         tabObj.term.write(evt.data);
       }
     };
 
-    tabObj.term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
+    // Dispose previous input handler so reconnects don't stack listeners
+    if (tabObj.dataSub) tabObj.dataSub.dispose();
+    tabObj.dataSub = tabObj.term.onData((data) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      // Sticky Ctrl from the on-screen key bar: Ctrl + <letter>
+      if (ctrlArmed && data.length === 1) {
+        const c = data.toUpperCase().charCodeAt(0);
+        if (c >= 64 && c <= 95) data = String.fromCharCode(c - 64);
+        setCtrlArmed(false);
       }
+      ws.send(data);
     });
 
     ws.onclose = () => {
+      if (tabObj.pingInterval) {
+        clearInterval(tabObj.pingInterval);
+        tabObj.pingInterval = null;
+      }
       if (!tabObj.closing) {
-        tabObj.term.write('\r\n\x1b[33m[Session closed. Reconnect or close this tab]\x1b[0m\r\n');
+        setTabStatus(tabObj, 'disconnected');
         showTabDisconnectBar(tabObj);
       }
     };
+  }
+
+  function setTabStatus(tabObj, status) {
+    tabObj.status = status;
+    tabObj.disconnected = (status === 'disconnected');
+    tabObj.tabEl.classList.toggle('is-connecting', status === 'connecting');
+    tabObj.tabEl.classList.toggle('is-disconnected', status === 'disconnected');
+    if (tabObj.panelEl) {
+      let ov = tabObj.panelEl.querySelector('.terminal-connecting');
+      if (status === 'connecting') {
+        if (!ov) {
+          ov = document.createElement('div');
+          ov.className = 'terminal-connecting';
+          ov.innerHTML = '<div class="spinner"></div><span>Connecting to ' + escapeHtml(tabObj.name) + '…</span>';
+          tabObj.panelEl.appendChild(ov);
+        }
+      } else if (ov) {
+        ov.remove();
+      }
+    }
+    refreshHostSessionBadges();
+  }
+
+  // --- On-screen key bar (mobile / touch) ---
+  function setCtrlArmed(on) {
+    ctrlArmed = on;
+    const b = document.querySelector('#mobile-keys [data-key="ctrl"]');
+    if (b) b.classList.toggle('armed', on);
+  }
+
+  function initMobileKeys() {
+    const bar = document.getElementById('mobile-keys');
+    if (!bar) return;
+    const seq = {
+      esc: '\x1b', tab: '\t', up: '\x1b[A', down: '\x1b[B',
+      right: '\x1b[C', left: '\x1b[D', home: '\x1b[H', end: '\x1b[F',
+      pgup: '\x1b[5~', pgdn: '\x1b[6~'
+    };
+    // Keep terminal focus (and the soft keyboard) when tapping keys
+    bar.addEventListener('mousedown', (e) => e.preventDefault());
+    bar.addEventListener('touchstart', (e) => { if (e.target.closest('button')) e.preventDefault(); }, { passive: false });
+    bar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-key]');
+      if (!btn) return;
+      const k = btn.dataset.key;
+      if (k === 'ctrl') { setCtrlArmed(!ctrlArmed); return; }
+      const active = tabs.find(t => t.id === activeTabId);
+      if (!active || !active.ws || active.ws.readyState !== WebSocket.OPEN) return;
+      const out = (k in seq) ? seq[k] : btn.dataset.send;
+      if (out) active.ws.send(out);
+      active.term.focus();
+    });
+  }
+
+  function changeFontSize(delta) {
+    termFontSize = Math.max(9, Math.min(28, termFontSize + delta));
+    try { localStorage.setItem('nodedeck_font_size', String(termFontSize)); } catch (e) {}
+    tabs.forEach(t => { t.term.options.fontSize = termFontSize; });
+    refitActiveTerminal();
+    toast('Font size: ' + termFontSize + 'px', 'info');
   }
 
   function sendResize(tabObj) {
@@ -1727,6 +2037,10 @@
     const tabObj = tabs[idx];
     tabObj.closing = true;
 
+    if (tabObj.pingInterval) {
+      clearInterval(tabObj.pingInterval);
+      tabObj.pingInterval = null;
+    }
     if (tabObj.ws) tabObj.ws.close();
     tabObj.term.dispose();
     tabObj.tabEl.remove();
@@ -1737,6 +2051,7 @@
     }
 
     tabs.splice(idx, 1);
+    refreshHostSessionBadges();
 
     if (tabs.length === 0) {
       showDashboard();
@@ -1783,6 +2098,26 @@
     if (e.altKey && (e.key === 'w' || e.key === 'W')) {
       e.preventDefault();
       if (activeTabId) closeTab(activeTabId);
+      return;
+    }
+    // Alt + = / Alt + - : terminal font size
+    if (e.altKey && (e.key === '=' || e.key === '+')) {
+      e.preventDefault();
+      changeFontSize(1);
+      return;
+    }
+    if (e.altKey && (e.key === '-' || e.key === '_')) {
+      e.preventDefault();
+      changeFontSize(-1);
+      return;
+    }
+    // Alt + Left / Right : previous / next tab
+    if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && tabs.length > 1) {
+      e.preventDefault();
+      const i = tabs.findIndex(t => t.id === activeTabId);
+      const step = e.key === 'ArrowRight' ? 1 : -1;
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      if (next) switchTab(next.id);
       return;
     }
     // Alt + [1-9] : Switch tab
@@ -1832,10 +2167,31 @@
   // App Initialization
   async function init() {
     initSidebar();
+    initMobileKeys();
     initThemes();
     initFileEditor();
     await ensureFontLoaded();
     await fetchHosts();
+
+    // Auto-reconnect when device regains network or comes back from sleep
+    window.addEventListener('online', () => {
+      tabs.forEach(t => {
+        if (t.disconnected && !t.closing) {
+          toast('Network restored. Reconnecting ' + t.name + '...', 'info');
+          connectWs(t);
+        }
+      });
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        tabs.forEach(t => {
+          if (t.disconnected && !t.closing) {
+            connectWs(t);
+          }
+        });
+      }
+    });
 
     // Default: Show Dashboard on initial start (do not auto-enter SSH shell)
     showDashboard();

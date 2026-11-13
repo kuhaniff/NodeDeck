@@ -22,7 +22,7 @@
 
   <!-- Xterm styles -->
   <link rel="stylesheet" href="/vendor/xterm.css">
-  <link rel="stylesheet" href="/style.css?v=20261109-v2">
+  <link rel="stylesheet" href="/style.css?v=20261113-v3">
 </head>
 <body>
   <div id="app">
@@ -322,6 +322,25 @@
             </div>
           </div>
         </div>
+
+        <!-- On-screen key bar for touch devices (Esc / Tab / Ctrl / arrows) -->
+        <div id="mobile-keys" role="toolbar" aria-label="Terminal keys">
+          <button type="button" data-key="esc">Esc</button>
+          <button type="button" data-key="tab">Tab</button>
+          <button type="button" data-key="ctrl" aria-pressed="false">Ctrl</button>
+          <button type="button" data-key="left" aria-label="Left">←</button>
+          <button type="button" data-key="down" aria-label="Down">↓</button>
+          <button type="button" data-key="up" aria-label="Up">↑</button>
+          <button type="button" data-key="right" aria-label="Right">→</button>
+          <button type="button" data-key="home">Home</button>
+          <button type="button" data-key="end">End</button>
+          <button type="button" data-key="pgup">PgUp</button>
+          <button type="button" data-key="pgdn">PgDn</button>
+          <button type="button" data-send="/">/</button>
+          <button type="button" data-send="|">|</button>
+          <button type="button" data-send="~">~</button>
+          <button type="button" data-send="-">-</button>
+        </div>
       </main>
     </div>
   </div>
@@ -517,6 +536,6 @@
   <script src="/vendor/addon-fit.js"></script>
   <script src="/vendor/addon-webgl.js"></script>
   <!-- Main Application -->
-  <script src="/app.js?v=20261109-v2"></script>
+  <script src="/app.js?v=20261113-v3"></script>
 </body>
 </html>

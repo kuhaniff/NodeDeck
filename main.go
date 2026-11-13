@@ -70,11 +70,92 @@ type FileListResponse struct {
 	Items   []FileItem `json:"items"`
 }
 
+type RingBuffer struct {
+	mu   sync.Mutex
+	buf  []byte
+	size int
+	max  int
+}
+
+func NewRingBuffer(max int) *RingBuffer {
+	return &RingBuffer{
+		buf: make([]byte, 0, max),
+		max: max,
+	}
+}
+
+func (rb *RingBuffer) Write(p []byte) (n int, err error) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	n = len(p)
+	if n >= rb.max {
+		rb.buf = append(rb.buf[:0], p[n-rb.max:]...)
+		return n, nil
+	}
+	overflow := len(rb.buf) + n - rb.max
+	if overflow > 0 {
+		rb.buf = append(rb.buf[overflow:], p...)
+	} else {
+		rb.buf = append(rb.buf, p...)
+	}
+	return n, nil
+}
+
+func (rb *RingBuffer) Bytes() []byte {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	out := make([]byte, len(rb.buf))
+	copy(out, rb.buf)
+	return out
+}
+
+type ManagedSession struct {
+	mu        sync.Mutex
+	tabID     string
+	cmd       *exec.Cmd
+	ptmx      *os.File
+	buffer    *RingBuffer
+	ws        *websocket.Conn
+	closed    bool
+	lastCols  uint16
+	lastRows  uint16
+	updatedAt time.Time
+}
+
+func (s *ManagedSession) setWS(conn *websocket.Conn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ws != nil && s.ws != conn {
+		_ = s.ws.Close()
+	}
+	s.ws = conn
+	s.updatedAt = time.Now()
+}
+
+func (s *ManagedSession) sendToWS(data []byte) {
+	s.mu.Lock()
+	conn := s.ws
+	s.mu.Unlock()
+	if conn != nil {
+		_ = conn.WriteMessage(websocket.BinaryMessage, data)
+	}
+}
+
+func (s *ManagedSession) sendJSON(v interface{}) {
+	s.mu.Lock()
+	conn := s.ws
+	s.mu.Unlock()
+	if conn != nil {
+		_ = conn.WriteJSON(v)
+	}
+}
+
 var (
-	activeSessions sync.Map // map[string]*exec.Cmd
-	tempSessions   sync.Map // map[string]HostItem
-	hostsMu        sync.Mutex
-	dataDirGlobal  string
+	managedSessions sync.Map // map[string]*ManagedSession
+	activeSessions  sync.Map // legacy placeholder
+	tempSessions    sync.Map // map[string]HostItem
+	hostsMu         sync.Mutex
+	dataDirGlobal   string
 )
 
 func getEnv(key, fallback string) string {
@@ -133,14 +214,17 @@ func saveHosts(hosts []HostItem) error {
 func isBlockedFsPath(path string) bool {
 	clean := filepath.Clean(path)
 	base := filepath.Base(clean)
-	// Block sensitive credentials, keys, shadow, and docker socket
+	// Block sensitive credentials, keys, shadow, env files, and docker socket
 	if strings.HasPrefix(base, "id_") || strings.HasSuffix(base, ".pem") || strings.HasSuffix(base, ".key") {
 		return true
 	}
-	if base == "shadow" || base == "sudoers" || base == "docker.sock" {
+	if base == ".env" || strings.HasPrefix(base, ".env.") {
 		return true
 	}
-	if clean == "/" || clean == "/etc" || clean == "/proc" || clean == "/sys" {
+	if base == "shadow" || base == "sudoers" || base == "docker.sock" || base == "authorized_keys" {
+		return true
+	}
+	if clean == "/" || clean == "/etc" || clean == "/proc" || clean == "/sys" || clean == "/root" {
 		return true
 	}
 	return false
@@ -479,17 +563,29 @@ func main() {
 	// 4. Session Termination API
 	http.HandleFunc("/api/close", func(w http.ResponseWriter, r *http.Request) {
 		tabID := sanitizeID(r.URL.Query().Get("id"))
-		if val, ok := activeSessions.Load(tabID); ok {
-			if cmd, ok := val.(*exec.Cmd); ok && cmd.Process != nil {
-				_ = cmd.Process.Kill()
+		if val, ok := managedSessions.Load(tabID); ok {
+			sess := val.(*ManagedSession)
+			sess.mu.Lock()
+			sess.closed = true
+			if sess.ws != nil {
+				_ = sess.ws.Close()
+				sess.ws = nil
 			}
-			activeSessions.Delete(tabID)
+			if sess.ptmx != nil {
+				_ = sess.ptmx.Close()
+			}
+			if sess.cmd != nil && sess.cmd.Process != nil {
+				_ = sess.cmd.Process.Kill()
+			}
+			sess.mu.Unlock()
+			managedSessions.Delete(tabID)
 		}
+		activeSessions.Delete(tabID)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// 5. WebSocket Terminal Dispatcher (/ws?id=...&host=...&session=...)
+	// 5. WebSocket Terminal Dispatcher with Session Persistence & Heartbeat (/ws?id=...&host=...&session=...)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		tabID := sanitizeID(r.URL.Query().Get("id"))
 		sessionID := r.URL.Query().Get("session")
@@ -524,16 +620,88 @@ func main() {
 			log.Printf("WebSocket upgrade failed: %v", err)
 			return
 		}
-		defer ws.Close()
 
-		var cmd *exec.Cmd
+		// Find or create managed session for persistence
+		var sess *ManagedSession
+		if val, ok := managedSessions.Load(tabID); ok {
+			existing := val.(*ManagedSession)
+			existing.mu.Lock()
+			if !existing.closed {
+				sess = existing
+			}
+			existing.mu.Unlock()
+		}
 
-		if targetHost.Type == "local" {
-			if targetHost.User == "aneep" {
-				cmd = exec.Command("sudo", "-u", "aneep", "-i", "bash", "-l")
-				cmd.Dir = "/home/aneep"
+		if sess == nil {
+			var cmd *exec.Cmd
+
+			if targetHost.Type == "local" {
+				if targetHost.User == "aneep" {
+					cmd = exec.Command("sudo", "-u", "aneep", "-i", "bash", "-l")
+					cmd.Dir = "/home/aneep"
+				} else {
+					cmd = exec.Command("bash", "-l")
+					cmd.Dir = homeDir
+					if os.Getuid() == 0 && puid > 0 {
+						cmd.SysProcAttr = &syscall.SysProcAttr{}
+						cmd.SysProcAttr.Credential = &syscall.Credential{
+							Uid: uint32(puid),
+							Gid: uint32(pgid),
+						}
+					}
+				}
 			} else {
-				cmd = exec.Command("bash", "-l")
+				// SSH Connection (Standard SSH or Tailscale SSH)
+				portNum := targetHost.Port
+				if portNum <= 0 {
+					portNum = 22
+				}
+				sshUser := targetHost.User
+				if sshUser == "" {
+					sshUser = "aneep"
+				}
+				sshHost := targetHost.Host
+				if sshHost == "" {
+					sshHost = "100.92.218.94"
+				}
+
+				sshArgs := []string{
+					"-o", "StrictHostKeyChecking=no",
+					"-o", "UserKnownHostsFile=/dev/null",
+					"-o", "LogLevel=ERROR",
+					"-p", strconv.Itoa(portNum),
+				}
+
+				if targetHost.Auth == "key" {
+					if targetHost.KeyPath != "" {
+						sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
+					} else if _, err := os.Stat("/home/hermes/.ssh/id_ed25519"); err == nil {
+						sshArgs = append(sshArgs, "-i", "/home/hermes/.ssh/id_ed25519")
+					}
+					sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
+					cmd = exec.Command("ssh", sshArgs...)
+				} else if targetHost.Auth == "password" {
+					if targetHost.Password != "" {
+						// Automated password via sshpass
+						fullArgs := append([]string{"-e", "ssh"}, append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))...)
+						cmd = exec.Command("sshpass", fullArgs...)
+					} else {
+						// Interactive password prompt in PTY
+						sshArgs = append(sshArgs,
+							"-o", "PreferredAuthentications=password,keyboard-interactive",
+							"-o", "PubkeyAuthentication=no",
+							fmt.Sprintf("%s@%s", sshUser, sshHost),
+						)
+						cmd = exec.Command("ssh", sshArgs...)
+					}
+				} else {
+					if targetHost.KeyPath != "" {
+						sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
+					}
+					sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
+					cmd = exec.Command("ssh", sshArgs...)
+				}
+
 				cmd.Dir = homeDir
 				if os.Getuid() == 0 && puid > 0 {
 					cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -543,136 +711,112 @@ func main() {
 					}
 				}
 			}
-		} else {
-			// SSH Connection (Standard SSH or Tailscale SSH)
-			portNum := targetHost.Port
-			if portNum <= 0 {
-				portNum = 22
+
+			env := append(os.Environ(),
+				"TERM=xterm-256color",
+				"COLORTERM=truecolor",
+				"HOME="+homeDir,
+				"USER="+targetHost.User,
+				"SHELL=/bin/bash",
+			)
+			if targetHost.Auth == "password" && targetHost.Password != "" {
+				env = append(env, "SSHPASS="+targetHost.Password)
 			}
-			sshUser := targetHost.User
-			if sshUser == "" {
-				sshUser = "aneep"
-			}
-			sshHost := targetHost.Host
-			if sshHost == "" {
-				sshHost = "100.92.218.94"
-			}
+			cmd.Env = env
 
-			sshArgs := []string{
-				"-o", "StrictHostKeyChecking=no",
-				"-o", "UserKnownHostsFile=/dev/null",
-				"-o", "LogLevel=ERROR",
-				"-p", strconv.Itoa(portNum),
-			}
-
-			if targetHost.Auth == "key" {
-				if targetHost.KeyPath != "" {
-					sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
-				} else if _, err := os.Stat("/home/hermes/.ssh/id_ed25519"); err == nil {
-					sshArgs = append(sshArgs, "-i", "/home/hermes/.ssh/id_ed25519")
-				}
-				sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
-				cmd = exec.Command("ssh", sshArgs...)
-			} else if targetHost.Auth == "password" {
-				if targetHost.Password != "" {
-					// Automated password via sshpass
-					fullArgs := append([]string{"-e", "ssh"}, append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))...)
-					cmd = exec.Command("sshpass", fullArgs...)
-				} else {
-					// Interactive password prompt in PTY
-					sshArgs = append(sshArgs,
-						"-o", "PreferredAuthentications=password,keyboard-interactive",
-						"-o", "PubkeyAuthentication=no",
-						fmt.Sprintf("%s@%s", sshUser, sshHost),
-					)
-					cmd = exec.Command("ssh", sshArgs...)
-				}
-			} else {
-				if targetHost.KeyPath != "" {
-					sshArgs = append(sshArgs, "-i", targetHost.KeyPath)
-				}
-				sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", sshUser, sshHost))
-				cmd = exec.Command("ssh", sshArgs...)
-			}
-
-			cmd.Dir = homeDir
-			if os.Getuid() == 0 && puid > 0 {
-				cmd.SysProcAttr = &syscall.SysProcAttr{}
-				cmd.SysProcAttr.Credential = &syscall.Credential{
-					Uid: uint32(puid),
-					Gid: uint32(pgid),
-				}
-			}
-		}
-
-		env := append(os.Environ(),
-			"TERM=xterm-256color",
-			"COLORTERM=truecolor",
-			"HOME="+homeDir,
-			"USER="+targetHost.User,
-			"SHELL=/bin/bash",
-		)
-		if targetHost.Auth == "password" && targetHost.Password != "" {
-			env = append(env, "SSHPASS="+targetHost.Password)
-		}
-		cmd.Env = env
-
-		ptmx, err := pty.Start(cmd)
-		if err != nil {
-			log.Printf("Failed to spawn PTY for %s: %v", targetHost.Name, err)
-			return
-		}
-
-		activeSessions.Store(tabID, cmd)
-
-		var once sync.Once
-		closeBoth := func() {
-			once.Do(func() {
-				activeSessions.Delete(tabID)
-				_ = ptmx.Close()
+			ptmx, err := pty.Start(cmd)
+			if err != nil {
+				log.Printf("Failed to spawn PTY for %s: %v", targetHost.Name, err)
 				_ = ws.Close()
-				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
-				}
-			})
-		}
-		defer closeBoth()
-
-		// PTY -> WebSocket
-		go func() {
-			defer closeBoth()
-			buf := make([]byte, 4096)
-			for {
-				n, err := ptmx.Read(buf)
-				if err != nil {
-					return
-				}
-				if err := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-					return
-				}
+				return
 			}
+
+			// Circular buffer to hold up to 2MB (~10,000 lines) of scrollback history
+			sess = &ManagedSession{
+				tabID:     tabID,
+				cmd:       cmd,
+				ptmx:      ptmx,
+				buffer:    NewRingBuffer(2 * 1024 * 1024),
+				ws:        ws,
+				updatedAt: time.Now(),
+			}
+			managedSessions.Store(tabID, sess)
+
+			// Reader pump: PTY -> Buffer -> WebSocket (Runs detached in background)
+			go func(s *ManagedSession) {
+				buf := make([]byte, 4096)
+				for {
+					n, err := s.ptmx.Read(buf)
+					if err != nil {
+						// PTY died (e.g. exit called)
+						s.mu.Lock()
+						s.closed = true
+						if s.ws != nil {
+							_ = s.ws.WriteMessage(websocket.TextMessage, []byte("\r\n\x1b[33m[Process exited]\x1b[0m\r\n"))
+							_ = s.ws.Close()
+						}
+						s.mu.Unlock()
+						managedSessions.Delete(s.tabID)
+						return
+					}
+					chunk := buf[:n]
+					_, _ = s.buffer.Write(chunk)
+					s.sendToWS(chunk)
+				}
+			}(sess)
+		} else {
+			// Re-attaching to existing background session:
+			// Send replay history buffer to restore terminal state
+			history := sess.buffer.Bytes()
+			if len(history) > 0 {
+				_ = ws.WriteMessage(websocket.BinaryMessage, history)
+			}
+			sess.setWS(ws)
+		}
+
+		defer func() {
+			sess.mu.Lock()
+			if sess.ws == ws {
+				sess.ws = nil
+			}
+			sess.mu.Unlock()
+			_ = ws.Close()
 		}()
 
-		// WebSocket -> PTY
+		// WebSocket -> PTY (Reader from client)
 		for {
 			msgType, data, err := ws.ReadMessage()
 			if err != nil {
 				break
 			}
 
-			// Handle JSON resize message: {"type":"resize","cols":80,"rows":24}
+			// Handle JSON commands (resize & heartbeat ping)
 			if msgType == websocket.TextMessage && len(data) > 0 && data[0] == '{' {
-				var sz WindowSizeMsg
-				if err := json.Unmarshal(data, &sz); err == nil && sz.Type == "resize" && sz.Cols > 0 && sz.Rows > 0 {
-					_ = pty.Setsize(ptmx, &pty.Winsize{
-						Cols: sz.Cols,
-						Rows: sz.Rows,
-					})
-					continue
+				var cmdMsg struct {
+					Type string `json:"type"`
+					Cols uint16 `json:"cols"`
+					Rows uint16 `json:"rows"`
+				}
+				if err := json.Unmarshal(data, &cmdMsg); err == nil {
+					if cmdMsg.Type == "ping" {
+						_ = ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"pong"}`))
+						continue
+					}
+					if cmdMsg.Type == "resize" && cmdMsg.Cols > 0 && cmdMsg.Rows > 0 {
+						sess.mu.Lock()
+						sess.lastCols = cmdMsg.Cols
+						sess.lastRows = cmdMsg.Rows
+						_ = pty.Setsize(sess.ptmx, &pty.Winsize{
+							Cols: cmdMsg.Cols,
+							Rows: cmdMsg.Rows,
+						})
+						sess.mu.Unlock()
+						continue
+					}
 				}
 			}
 
-			if _, err := ptmx.Write(data); err != nil {
+			if _, err := sess.ptmx.Write(data); err != nil {
 				break
 			}
 		}
