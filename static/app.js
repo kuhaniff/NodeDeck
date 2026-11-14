@@ -284,6 +284,15 @@
       }
       if (res.ok) {
         state.hosts = await res.json();
+        // If sftpHostId was not explicitly set or was local and we have hosts:
+        if ((!state.sftpHostId || state.sftpHostId === 'local') && state.hosts.length > 0 && !localStorage.getItem('nodedeck_sftp_active_host')) {
+          state.sftpHostId = state.hosts[0].id;
+          const target = state.hosts[0];
+          if (target.user && target.user !== 'root') {
+            state.sftpPath = '/home/' + target.user;
+          }
+          fetchFsList(state.sftpPath);
+        }
         renderLeftSidebarContent();
         if (state.activeTabId === 'launcher') renderMainCanvas();
       }
@@ -1152,7 +1161,15 @@
               </div>
             `;
           }).join('') : `
-            <div class="py-12 text-center text-[11px] t-text-muted">Directory is empty</div>
+            <div class="py-12 px-4 text-center space-y-2 select-none">
+              <i data-lucide="folder-open" class="w-8 h-8 mx-auto t-text-muted opacity-40"></i>
+              <div class="text-[11px] font-medium t-text-muted">Directory is empty</div>
+              ${!isRemote ? `
+                <div class="text-[10px] text-amber-400/80 leading-relaxed font-mono">
+                  You are viewing <b>Local (node02)</b>.<br>To access <b>node01</b> files, select <b>hermes</b> or <b>aneep</b> in the dropdown above.
+                </div>
+              ` : ''}
+            </div>
           `}
         </div>
 
