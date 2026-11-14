@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="nodedeck-readme-logo-v2.png" width="640" alt="NodeDeck Banner" />
+  <img src="nodedeck-banner.png" width="640" alt="NodeDeck Banner" />
   <h1>NodeDeck</h1>
   <p><strong>Modern Minimalist Web Terminal & SFTP Manager</strong></p>
   <p>Built with Go, xterm.js, and JetBrains Mono Nerd Font</p>
