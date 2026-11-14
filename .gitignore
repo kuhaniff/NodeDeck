@@ -3,3 +3,6 @@
 starship-bin
 data/
 
+.env
+.env.*
+static.bak/

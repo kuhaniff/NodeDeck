@@ -1,541 +1,410 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="coolnight">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>NodeDeck Terminal</title>
-  <meta name="description" content="NodeDeck - Modern Web SSH Terminal & SFTP">
-  <meta name="theme-color" content="#0a0c10">
+  <title>NodeDeck — Modern WebSSH & SFTP Workspace</title>
+  <meta name="description" content="NodeDeck - Modern Web SSH Terminal, SFTP Explorer & Snippets">
+  <meta name="theme-color" content="#00111E">
   <meta name="color-scheme" content="dark">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NodeDeck">
 
-  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.json">
 
-  <!-- Preload Complete JetBrainsMono Nerd Font -->
+  <!-- Fonts: Google Fonts fallback + local preloads -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="preload" href="/vendor/fonts/JetBrainsMonoNerdFont-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="preload" href="/vendor/fonts/JetBrainsMonoNerdFont-Bold.ttf" as="font" type="font/ttf" crossorigin>
 
-  <!-- Xterm styles -->
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="/vendor/tailwindcss.js"></script>
+  <script src="/vendor/lucide.js"></script>
+  <script>
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ["'JetBrainsMono Nerd Font'", "'JetBrains Mono'", 'monospace'],
+            }
+          }
+        }
+      };
+    }
+  </script>
+
+  <!-- Xterm styles & Custom Theme variables -->
   <link rel="stylesheet" href="/vendor/xterm.css">
-  <link rel="stylesheet" href="/style.css?v=20261113-v4">
+  <link rel="stylesheet" href="/style.css?v=20261114-v13">
 </head>
-<body>
-  <div id="app">
-    <!-- Top Header & Tab Bar -->
-    <header id="tab-bar">
-      <!-- Sidebar Toggle Button -->
-      <button id="btn-toggle-sidebar" class="icon-btn" title="Toggle Sidebar (Alt+B)" aria-label="Toggle Sidebar">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <line x1="9" y1="3" x2="9" y2="21"/>
-        </svg>
-      </button>
+<body class="h-screen w-screen flex flex-col text-xs antialiased" data-theme="coolnight">
 
-      <!-- Dashboard / Home Button -->
-      <button id="btn-dashboard" class="icon-btn active" title="Dashboard / Connections" aria-label="Dashboard">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
-      </button>
-
-      <!-- Dynamic Terminal Tabs -->
-      <div id="tabs-container"></div>
-      
-      <!-- New Tab Dropdown -->
-      <div class="dropdown-wrapper">
-        <button id="btn-new-tab" class="icon-btn" title="New Tab / Select Connection (Alt+T)" aria-label="New Tab">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-        <div id="host-dropdown" class="dropdown-menu"></div>
-      </div>
-
-      <!-- Right Header Actions -->
-      <div id="tab-actions">
-        <!-- Theme Switcher -->
-        <div class="dropdown-wrapper">
-          <button id="btn-theme-selector" class="pill-btn" title="Change Terminal Theme" aria-label="Select Theme">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="5"/>
-              <line x1="12" y1="1" x2="12" y2="3"/>
-              <line x1="12" y1="21" x2="12" y2="23"/>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-              <line x1="1" y1="12" x2="3" y2="12"/>
-              <line x1="21" y1="12" x2="23" y2="12"/>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-            </svg>
-            <span id="theme-active-label">Slate</span>
-          </button>
-          <div id="theme-dropdown" class="dropdown-menu theme-menu"></div>
+  <!-- =========================================================================
+       1. TOP 40px HEADER CHROME BAR
+       ========================================================================= -->
+  <header class="h-[40px] t-bg-surface border-b t-border flex items-center justify-between px-2.5 gap-2 shrink-0 z-30 smooth-transition">
+    <!-- Left: NodeDeck Home Logo + Sidebar Toggle + Live Tabs -->
+    <div class="flex items-center gap-1.5 min-w-0 flex-1">
+      <!-- Logo Home Button -->
+      <button id="homeLogoBtn" onclick="window.NodeDeck.switchTab('launcher')" title="NodeDeck Home / Omnibox (Alt+1)"
+        class="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-transparent t-accent-soft font-semibold smooth-transition shrink-0">
+        <div class="w-4 h-4 rounded t-accent-bg flex items-center justify-center font-bold shadow-sm">
+          <i data-lucide="terminal" class="w-2.5 h-2.5"></i>
         </div>
+        <span class="font-semibold tracking-tight text-xs">NodeDeck</span>
+      </button>
 
-        <button id="btn-quick-add-host" class="pill-btn" title="Add New Host Connection">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          <span>Host</span>
-        </button>
-        <button id="pwa-install-btn" class="pill-btn pwa-btn" title="Install as PWA App">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span>Install</span>
-        </button>
+      <!-- Sidebar Toggle (Ctrl+B) -->
+      <button id="sidebarToggleBtn" onclick="window.NodeDeck.toggleLeftSidebar()" title="Toggle Sidebar (Ctrl+B)"
+        class="w-7 h-7 rounded-lg flex items-center justify-center t-text-secondary hover:t-text-primary t-hover-bg border border-transparent hover:t-border smooth-transition shrink-0">
+        <i id="sidebarToggleIcon" data-lucide="panel-left-close" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <div class="h-3.5 w-[1px] t-border border-l mx-0.5 shrink-0"></div>
+
+      <!-- Live Tabs Strip -->
+      <div id="tabsStrip" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5"></div>
+
+      <!-- Quick New Tab / Connect Button -->
+      <button onclick="window.NodeDeck.switchTab('launcher')" title="New Connection (Home)"
+        class="w-6 h-6 rounded-lg flex items-center justify-center t-text-muted hover:t-text-primary t-hover-bg smooth-transition shrink-0">
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+
+    <!-- Center: Quick Command Palette Trigger (Large Screen) -->
+    <div class="hidden xl:flex items-center justify-center shrink-0">
+      <button onclick="window.NodeDeck.openCommandPalette()" class="flex items-center gap-5 px-3 py-1 rounded-lg t-bg-base hover:t-bg-elevated border t-border hover:t-border-strong text-[11px] t-text-muted smooth-transition">
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="search" class="w-3 h-3 t-accent-text"></i>
+          <span>Search hosts or Quick SSH...</span>
+        </span>
+        <kbd class="px-1.5 py-0.2 rounded t-bg-surface border t-border font-mono text-[10px] t-text-secondary">Ctrl K</kbd>
+      </button>
+    </div>
+
+    <!-- Right Actions: Latency Ping + Split View 50/50 + Theme Switcher -->
+    <div class="flex items-center justify-end gap-1.5 shrink-0">
+      <button onclick="window.NodeDeck.openCommandPalette()" class="xl:hidden p-1.5 rounded-lg t-text-muted t-hover-bg" title="Command Palette (Ctrl+K)">
+        <i data-lucide="search" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <!-- Live Ping Badge -->
+      <div id="topBarPingBadge" title="Live RTT Latency"
+        class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg t-bg-base border t-border font-mono text-[11px] t-text-secondary shrink-0">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+        </span>
+        <span id="topBarPingValue">-- ms</span>
       </div>
-    </header>
 
-    <!-- Main Workspace -->
-    <div id="app-body">
-      <!-- Collapsible Sidebar (Termius Style) -->
-      <aside id="sidebar">
-        <!-- Segmented Navigation Header -->
-        <div class="sidebar-nav">
-          <button class="nav-tab active" data-view="hosts">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <rect x="2" y="2" width="20" height="8" rx="2"/>
-              <rect x="2" y="14" width="20" height="8" rx="2"/>
-              <line x1="6" y1="6" x2="6.01" y2="6"/>
-              <line x1="6" y1="18" x2="6.01" y2="18"/>
-            </svg>
+      <!-- Split View 50/50 Toggle -->
+      <button id="splitToggleBtn" onclick="window.NodeDeck.toggleSplitPane()" title="Split View 50/50 (Ctrl+\)"
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border t-border text-[11px] t-text-secondary t-hover-bg smooth-transition">
+        <i data-lucide="columns-2" class="w-3.5 h-3.5"></i>
+        <span class="hidden lg:inline">Split</span>
+      </button>
+
+      <!-- Theme Dropdown Button -->
+      <div class="relative" id="themeDropdownWrap">
+        <button id="themeDropdownBtn" onclick="window.NodeDeck.toggleThemeMenu(event)" title="Switch Terminal Theme"
+          class="flex items-center gap-2 px-2.5 py-1 rounded-lg t-bg-base hover:t-bg-elevated border t-border hover:t-border-strong text-[11px] t-text-primary smooth-transition">
+          <span id="themeActiveDot" class="w-2.5 h-2.5 rounded-full bg-[#0FC5ED] ring-1 ring-white/25"></span>
+          <span id="themeActiveLabel" class="font-medium">Coolnight</span>
+          <i data-lucide="chevron-down" class="w-3 h-3 t-text-muted"></i>
+        </button>
+
+        <!-- Theme Menu -->
+        <div id="themeDropdownMenu" class="hidden absolute right-0 mt-1.5 w-48 rounded-xl glass-modal border t-border-strong shadow-2xl py-1.5 z-50">
+          <div class="px-3 py-1 text-[9px] font-mono uppercase tracking-wider t-text-muted">Terminal Themes</div>
+          <button onclick="window.NodeDeck.selectThemeFromMenu('coolnight')" data-theme-item="coolnight"
+            class="theme-menu-item w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between t-hover-bg smooth-transition">
+            <span class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#0FC5ED]"></span>
+              <span>Coolnight</span>
+            </span>
+            <i data-lucide="check" class="theme-check w-3.5 h-3.5 t-accent-text hidden"></i>
+          </button>
+          <button onclick="window.NodeDeck.selectThemeFromMenu('cutiepro')" data-theme-item="cutiepro"
+            class="theme-menu-item w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between t-hover-bg smooth-transition">
+            <span class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#F56E7F]"></span>
+              <span>CutiePro</span>
+            </span>
+            <i data-lucide="check" class="theme-check w-3.5 h-3.5 t-accent-text hidden"></i>
+          </button>
+          <button onclick="window.NodeDeck.selectThemeFromMenu('monokai')" data-theme-item="monokai"
+            class="theme-menu-item w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between t-hover-bg smooth-transition">
+            <span class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#98E024]"></span>
+              <span>Monokai Remastered</span>
+            </span>
+            <i data-lucide="check" class="theme-check w-3.5 h-3.5 t-accent-text hidden"></i>
+          </button>
+          <button onclick="window.NodeDeck.selectThemeFromMenu('fahrenheit')" data-theme-item="fahrenheit"
+            class="theme-menu-item w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between t-hover-bg smooth-transition">
+            <span class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#FD9F4D]"></span>
+              <span>Fahrenheit</span>
+            </span>
+            <i data-lucide="check" class="theme-check w-3.5 h-3.5 t-accent-text hidden"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       2. MIDDLE SHELL: 280px LEFT SIDEBAR + PRIMARY WORKSPACE CANVAS
+       ========================================================================= -->
+  <div class="flex-1 flex min-h-0 relative">
+
+    <!-- 280px COLLAPSIBLE & RESIZABLE SIDEBAR PANEL (Hosts, SFTP, Snippets) -->
+    <aside id="leftSidebar" class="w-[280px] min-w-[200px] max-w-[85vw] t-bg-surface border-r t-border flex flex-col shrink-0 z-20 relative">
+      <!-- Top Segmented Nav Tabs -->
+      <div class="p-2 border-b t-border shrink-0">
+        <div class="grid grid-cols-3 p-0.5 rounded-lg t-bg-base border t-border gap-0.5">
+          <button onclick="window.NodeDeck.setSidebarTab('hosts')" data-stab="hosts"
+            class="stab-btn py-1.5 rounded-md text-[11px] font-medium flex items-center justify-center gap-1.5 smooth-transition">
+            <i data-lucide="server" class="w-3 h-3"></i>
             <span>Hosts</span>
           </button>
-          <button class="nav-tab" data-view="files">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span>SFTP Files</span>
+          <button onclick="window.NodeDeck.setSidebarTab('sftp')" data-stab="sftp"
+            class="stab-btn py-1.5 rounded-md text-[11px] font-medium flex items-center justify-center gap-1.5 smooth-transition">
+            <i data-lucide="folder" class="w-3 h-3"></i>
+            <span>SFTP</span>
+          </button>
+          <button onclick="window.NodeDeck.setSidebarTab('snippets')" data-stab="snippets"
+            class="stab-btn py-1.5 rounded-md text-[11px] font-medium flex items-center justify-center gap-1.5 smooth-transition">
+            <i data-lucide="zap" class="w-3 h-3"></i>
+            <span>Snippets</span>
           </button>
         </div>
+      </div>
 
-        <!-- 1. Hosts View -->
-        <section id="view-hosts" class="sidebar-view active">
-          <div class="search-box">
-            <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input type="text" id="host-search" placeholder="Search hosts..." autocomplete="off">
-          </div>
-          <div id="host-list" class="item-list"></div>
-          <div class="view-footer">
-            <button id="btn-add-host" class="btn-primary full-width">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              <span>Add Connection</span>
-            </button>
-          </div>
-        </section>
+      <!-- Sidebar Dynamic Content Container -->
+      <div id="leftSidebarBody" class="flex-1 flex flex-col min-h-0 overflow-hidden"></div>
 
-        <!-- 2. Files / SFTP Explorer View -->
-        <section id="view-files" class="sidebar-view">
-          <!-- Disconnected state (Manual path select, no auto-connect) -->
-          <div id="fs-connect-view" class="fs-connect-panel">
-            <div class="fs-connect-header">
-              <div class="fs-connect-icon">
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#3b82f6" stroke-width="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                </svg>
-              </div>
-              <h4>File Explorer</h4>
-              <p>Select or enter a directory path to browse server files</p>
-            </div>
-            <div class="fs-preset-paths">
-              <button type="button" class="fs-preset-btn" data-path="/home/aneep/stacks">📁 /home/aneep/stacks</button>
-              <button type="button" class="fs-preset-btn" data-path="/home/aneep">📁 /home/aneep</button>
-              <button type="button" class="fs-preset-btn" data-path="/home/hermes">📁 /home/hermes</button>
-            </div>
-            <form id="fs-custom-path-form" class="fs-custom-form">
-              <label>Directory Path</label>
-              <input type="text" id="fs-custom-input" placeholder="/home/aneep/stacks" required autocomplete="off">
-              <button type="submit" class="btn-primary full-width">Open Directory</button>
-            </form>
-          </div>
+      <!-- Drag to resize handle -->
+      <div id="sidebarResizer" class="sidebar-resizer" title="Drag to resize sidebar"></div>
+    </aside>
 
-          <!-- Connected state (Active file browsing) -->
-          <div id="fs-active-view" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
-            <div class="fs-toolbar">
-              <button id="fs-btn-up" class="fs-icon-btn" title="Go Up">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <line x1="12" y1="19" x2="12" y2="5"/>
-                  <polyline points="5 12 12 5 19 12"/>
-                </svg>
-              </button>
-              <div class="fs-path-wrapper">
-                <span id="fs-current-path" title="Current Path">-</span>
-              </div>
-              <button id="fs-btn-refresh" class="fs-icon-btn" title="Refresh Directory">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <polyline points="23 4 23 10 17 10"/>
-                  <polyline points="1 20 1 14 7 14"/>
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                </svg>
-              </button>
-              <button id="fs-btn-disconnect" class="fs-icon-btn" title="Disconnect / Change Path">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#ef4444" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-            <div class="fs-actions">
-              <button id="fs-btn-mkdir" class="fs-btn" title="Create New Folder">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  <line x1="12" y1="11" x2="12" y2="17"/>
-                  <line x1="9" y1="14" x2="15" y2="14"/>
-                </svg>
-                <span>+ Folder</span>
-              </button>
-              <label class="fs-btn fs-upload-label" title="Upload Files">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <span>Upload</span>
-                <input type="file" id="fs-file-input" multiple style="display:none">
-              </label>
-            </div>
-            <div id="file-list" class="item-list"></div>
-          </div>
-        </section>
-        <!-- Resizer handle for draggable sidebar resizing -->
-        <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize sidebar"></div>
-      </aside>
+    <!-- PRIMARY WORKSPACE CANVAS (Home Omnibox OR Active Terminals) -->
+    <main id="mainCanvas" class="flex-1 flex min-w-0 min-h-0 relative overflow-hidden"></main>
 
-      <!-- Terminal Area & Dashboard View -->
-      <main id="terminal-container">
-        <!-- Dashboard / Welcome Screen (WebSSH / Termius Style) -->
-        <div id="dashboard-view" class="dashboard-container">
-          <div class="dashboard-content">
-            <!-- Hero Header -->
-            <div class="dashboard-hero">
-              <div class="hero-brand">
-                <div class="hero-logo">
-                  <img src="/logo.png" alt="NodeDeck Logo" width="46" height="46" class="hero-logo-img">
-                </div>
-                <div>
-                  <h1 class="hero-title">NodeDeck Terminal</h1>
-                  <p class="hero-subtitle">Select a saved host connection or use Quick Connect below</p>
-                </div>
-              </div>
-            </div>
+  </div>
 
-            <!-- Quick Connect & Saved Hosts -->
-            <div class="dashboard-sections">
-              <!-- 1. Quick Connect Form -->
-              <div class="dash-card">
-                <div class="dash-card-header">
-                  <div class="dash-card-title">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2.2">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                    </svg>
-                    <span>Quick Connect</span>
-                  </div>
-                </div>
-                <form id="form-quick-connect" class="quick-form">
-                  <div class="quick-form-grid">
-                    <div class="form-group span-2">
-                      <label>Host / IP Address</label>
-                      <input type="text" id="qc-host" placeholder="e.g. 100.92.218.94 or node02" required>
-                    </div>
-                    <div class="form-group">
-                      <label>Port</label>
-                      <input type="number" id="qc-port" value="22" required>
-                    </div>
-                    <div class="form-group span-2">
-                      <label>Username</label>
-                      <input type="text" id="qc-user" placeholder="e.g. aneep / hermes" required>
-                    </div>
-                    <div class="form-group">
-                      <label>Authentication Method</label>
-                      <select id="qc-auth">
-                        <option value="password">Password</option>
-                        <option value="key">SSH Key (~/.ssh/id_ed25519)</option>
-                        <option value="interactive">Interactive Password in Terminal</option>
-                      </select>
-                    </div>
-                    <div class="form-group span-3" id="qc-group-password">
-                      <label>Password</label>
-                      <div class="input-password-wrap">
-                        <input type="password" id="qc-password" placeholder="Enter SSH password...">
-                        <button type="button" class="btn-eye" id="qc-btn-eye" title="Show / Hide Password">
-                          <svg class="eye-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div class="form-group span-3" id="qc-group-key" style="display:none;">
-                      <label>SSH Private Key Path</label>
-                      <input type="text" id="qc-keypath" value="/home/hermes/.ssh/id_ed25519" placeholder="/home/hermes/.ssh/id_ed25519">
-                    </div>
-                  </div>
-                  <div class="quick-form-actions">
-                    <span id="qc-status-msg" style="font-size: 12px; color: #ef4444; display: none;"></span>
-                    <button id="qc-btn-submit" type="submit" class="btn-primary">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;">
-                        <polygon points="5 3 19 12 5 21 5 3"/>
-                      </svg>
-                      <span>Connect Now</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
+  <!-- =========================================================================
+       MOBILE TOUCH KEY BAR
+       ========================================================================= -->
+  <div id="mobile-keys">
+    <button type="button" class="key-btn" data-key="esc">ESC</button>
+    <button type="button" class="key-btn" data-key="tab">TAB</button>
+    <button type="button" class="key-btn" data-key="ctrl">CTRL</button>
+    <button type="button" class="key-btn" data-key="c">^C</button>
+    <button type="button" class="key-btn" data-key="d">^D</button>
+    <button type="button" class="key-btn" data-key="z">^Z</button>
+    <button type="button" class="key-btn" data-key="up">↑</button>
+    <button type="button" class="key-btn" data-key="down">↓</button>
+    <button type="button" class="key-btn" data-key="left">←</button>
+    <button type="button" class="key-btn" data-key="right">→</button>
+    <button type="button" class="key-btn" data-key="pipe">|</button>
+    <button type="button" class="key-btn" data-key="tilde">~</button>
+    <button type="button" class="key-btn" data-key="slash">/</button>
+  </div>
 
-              <!-- 2. Saved Hosts Grid -->
-              <div class="dash-card">
-                <div class="dash-card-header">
-                  <div class="dash-card-title">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#10b981" stroke-width="2">
-                      <rect x="2" y="2" width="20" height="8" rx="2"/>
-                      <rect x="2" y="14" width="20" height="8" rx="2"/>
-                    </svg>
-                    <span>Saved Hosts</span>
-                  </div>
-                  <button id="dash-btn-add-host" class="dash-btn-add" title="Add New Connection">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <line x1="12" y1="5" x2="12" y2="19"/>
-                      <line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
-                    <span>Add Host</span>
-                  </button>
-                </div>
-                <div id="dash-hosts-grid" class="dash-hosts-grid"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+  <!-- =========================================================================
+       3. BOTTOM 24px STATUS TELEMETRY BAR
+       ========================================================================= -->
+  <footer class="h-[24px] t-bg-surface border-t t-border px-3 flex items-center justify-between text-[10px] font-mono t-text-muted shrink-0 z-30 smooth-transition">
+    <div class="flex items-center gap-3">
+      <span class="flex items-center gap-1.5 text-emerald-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>WS Heartbeat: 25s</span>
+      </span>
+      <span class="opacity-40">|</span>
+      <span id="telemetryLatency" class="t-text-secondary">RTT: -- ms</span>
+      <span class="hidden sm:inline opacity-40">|</span>
+      <span id="telemetryGrid" class="hidden sm:inline t-text-secondary">--×--</span>
+      <span class="hidden md:inline opacity-40">|</span>
+      <span class="hidden md:inline">SSH-2.0</span>
+    </div>
 
-        <!-- On-screen key bar for touch devices (Esc / Tab / Ctrl / arrows) -->
-        <div id="mobile-keys" role="toolbar" aria-label="Terminal keys">
-          <button type="button" data-key="esc">Esc</button>
-          <button type="button" data-key="tab">Tab</button>
-          <button type="button" data-key="ctrl" aria-pressed="false">Ctrl</button>
-          <button type="button" data-key="left" aria-label="Left">←</button>
-          <button type="button" data-key="down" aria-label="Down">↓</button>
-          <button type="button" data-key="up" aria-label="Up">↑</button>
-          <button type="button" data-key="right" aria-label="Right">→</button>
-          <button type="button" data-key="home">Home</button>
-          <button type="button" data-key="end">End</button>
-          <button type="button" data-key="pgup">PgUp</button>
-          <button type="button" data-key="pgdn">PgDn</button>
-          <button type="button" data-send="/">/</button>
-          <button type="button" data-send="|">|</button>
-          <button type="button" data-send="~">~</button>
-          <button type="button" data-send="-">-</button>
-        </div>
-      </main>
+    <div class="flex items-center gap-3">
+      <span class="hidden lg:inline"><kbd class="t-text-secondary">Ctrl+B</kbd> Sidebar</span>
+      <span class="hidden md:inline"><kbd class="t-text-secondary">Ctrl+K</kbd> Palette</span>
+      <span class="hidden md:inline"><kbd class="t-text-secondary">Ctrl+\</kbd> Split</span>
+      <span id="telemetrySessionBadge" class="t-accent-text font-medium">HOME · READY</span>
+    </div>
+  </footer>
+
+  <!-- =========================================================================
+       COMMAND PALETTE MODAL (Ctrl+K)
+       ========================================================================= -->
+  <div id="cmdPaletteBackdrop" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-start justify-center pt-[12vh] p-4">
+    <div class="w-full max-w-lg rounded-2xl glass-modal border t-border-strong shadow-2xl overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b t-border flex items-center gap-2.5">
+        <i data-lucide="terminal" class="w-4 h-4 t-accent-text shrink-0"></i>
+        <input id="cmdPaletteInput" type="text" placeholder="Type user@host:port, search hosts, or run action..."
+          class="flex-1 bg-transparent text-xs t-text-primary placeholder:opacity-50 focus:outline-none font-mono" />
+        <kbd class="px-1.5 py-0.5 rounded t-bg-base border t-border text-[10px] font-mono t-text-muted">ESC</kbd>
+      </div>
+      <div id="cmdPaletteList" class="max-h-72 overflow-y-auto p-1.5 space-y-0.5"></div>
     </div>
   </div>
 
-  <!-- Modal 1: Add / Edit Host -->
-  <div id="modal-host" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-header-title">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2">
-            <rect x="2" y="2" width="20" height="8" rx="2"/>
-            <rect x="2" y="14" width="20" height="8" rx="2"/>
-          </svg>
-          <h3 id="modal-host-title">Add Host Connection</h3>
-        </div>
-        <button class="modal-close" id="modal-host-close" title="Close">&times;</button>
+  <!-- =========================================================================
+       ADD / EDIT HOST MODAL
+       ========================================================================= -->
+  <div id="nodeModalBackdrop" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-2xl glass-modal border t-border-strong shadow-2xl overflow-hidden">
+      <div class="px-4 py-3 border-b t-border flex items-center justify-between">
+        <span id="nodeModalTitle" class="font-semibold text-xs t-text-primary">Add New Host</span>
+        <button onclick="window.NodeDeck.closeNodeModal()" class="p-1 rounded t-hover-bg t-text-muted hover:t-text-primary">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
       </div>
-      <form id="form-host" class="modal-body">
-        <input type="hidden" id="host-input-id">
-        <div class="form-group">
-          <label>Display Name</label>
-          <input type="text" id="host-input-name" placeholder="e.g. node02 (production)" required>
-        </div>
-        <div class="form-group">
-          <label>Connection Type</label>
-          <select id="host-input-type">
-            <option value="ssh">SSH (Remote / Tailscale)</option>
-            <option value="local">Local Shell (Direct PTY)</option>
-          </select>
-        </div>
-        <div class="form-group" id="group-host-address">
-          <label>Host Address / Tailscale IP</label>
-          <input type="text" id="host-input-address" placeholder="e.g. 100.92.218.94 or node02">
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Username</label>
-            <input type="text" id="host-input-user" placeholder="e.g. aneep / hermes" required>
+      <form id="nodeModalForm" class="p-4 space-y-3">
+        <input type="hidden" id="editNodeId" />
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="col-span-2">
+            <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Host Alias / Name</label>
+            <input id="nodeAlias" type="text" required placeholder="e.g. server-01 or homelab"
+              class="w-full px-3 py-1.5 rounded-lg t-bg-base border t-border text-xs t-text-primary focus:outline-none focus:t-border-strong" />
           </div>
-          <div class="form-group" id="group-host-port">
-            <label>Port</label>
-            <input type="number" id="host-input-port" value="22">
+          <div>
+            <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Network</label>
+            <select id="nodeEnv" class="w-full px-2.5 py-1.5 rounded-lg t-bg-base border t-border text-xs t-text-primary focus:outline-none">
+              <option value="LAN">LAN</option>
+              <option value="Tailscale">Tailscale</option>
+              <option value="Tunnel">Tunnel</option>
+            </select>
           </div>
         </div>
-        <div class="form-group" id="group-host-auth">
-          <label>Authentication Method</label>
-          <select id="host-input-auth">
-            <option value="password">Password</option>
-            <option value="key">SSH Key (~/.ssh/id_ed25519)</option>
-            <option value="interactive">Interactive Password in Terminal</option>
-            <option value="local">Local Shell (Direct PTY)</option>
-          </select>
-        </div>
-        <div class="form-group" id="group-host-password">
-          <label>Password</label>
-          <div class="input-password-wrap">
-            <input type="password" id="host-input-password" placeholder="Enter host password...">
-            <button type="button" class="btn-eye" id="host-btn-eye" title="Show / Hide Password">
-              <svg class="eye-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
+        <div class="grid grid-cols-4 gap-2.5">
+          <div class="col-span-3">
+            <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Host / IP / Domain</label>
+            <input id="nodeHost" type="text" required placeholder="192.168.1.100 or ssh.example.com"
+              class="w-full px-3 py-1.5 rounded-lg t-bg-base border t-border font-mono text-xs t-text-primary focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Port</label>
+            <input id="nodePort" type="number" value="22" required
+              class="w-full px-3 py-1.5 rounded-lg t-bg-base border t-border font-mono text-xs t-text-primary focus:outline-none" />
           </div>
         </div>
-        <div class="form-group" id="group-host-key" style="display:none;">
-          <label>SSH Private Key Path</label>
-          <input type="text" id="host-input-keypath" placeholder="/home/hermes/.ssh/id_ed25519">
-        </div>
-        <div class="form-group">
-          <label>Badge Color</label>
-          <div class="color-picker-row">
-            <label><input type="radio" name="host-color" value="#3b82f6" checked><span class="dot" style="background:#3b82f6"></span></label>
-            <label><input type="radio" name="host-color" value="#10b981"><span class="dot" style="background:#10b981"></span></label>
-            <label><input type="radio" name="host-color" value="#f59e0b"><span class="dot" style="background:#f59e0b"></span></label>
-            <label><input type="radio" name="host-color" value="#8b5cf6"><span class="dot" style="background:#8b5cf6"></span></label>
-            <label><input type="radio" name="host-color" value="#ef4444"><span class="dot" style="background:#ef4444"></span></label>
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Username</label>
+            <input id="nodeUser" type="text" required placeholder="e.g. ubuntu or debian"
+              class="w-full px-3 py-1.5 rounded-lg t-bg-base border t-border font-mono text-xs t-text-primary focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Auth Method</label>
+            <select id="nodeAuth" onchange="window.NodeDeck.onModalAuthChange()" class="w-full px-2.5 py-1.5 rounded-lg t-bg-base border t-border text-xs t-text-primary focus:outline-none">
+              <option value="key">SSH Key</option>
+              <option value="password">Password</option>
+            </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="btn-cancel-host">Cancel</button>
-          <button type="submit" class="btn-primary">Save Connection</button>
+        <div id="nodePasswordGroup" class="hidden">
+          <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">Password</label>
+          <input id="nodePassword" type="password" placeholder="Password"
+            class="w-full px-3 py-1.5 rounded-lg t-bg-base border t-border font-mono text-xs t-text-primary focus:outline-none" />
+        </div>
+        <div id="nodeKeyGroup">
+          <label class="block text-[10px] uppercase tracking-wider t-text-muted mb-1">SSH Key Path (optional)</label>
+          <input id="nodeKeyPath" type="text" placeholder="~/.ssh/id_ed25519"
+            class="w-full px-3 py-1.5 rounded-lg t-bg-base border t-border font-mono text-xs t-text-primary focus:outline-none" />
+        </div>
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="window.NodeDeck.closeNodeModal()" class="px-3 py-1.5 rounded-lg t-text-muted hover:t-text-primary t-hover-bg">Cancel</button>
+          <button type="submit" class="px-4 py-1.5 rounded-lg t-accent-bg font-semibold">Save Host</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal 2: Create New Folder (SFTP) -->
-  <div id="modal-mkdir" class="modal-overlay">
-    <div class="modal-box modal-box-sm">
-      <div class="modal-header">
-        <div class="modal-header-title">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            <line x1="12" y1="11" x2="12" y2="17"/>
-            <line x1="9" y1="14" x2="15" y2="14"/>
-          </svg>
-          <h3>Create New Folder</h3>
+  <!-- =========================================================================
+       FILE PREVIEW & EDITOR MODAL (OpenCode Style)
+       ========================================================================= -->
+  <div id="fileEditorBackdrop" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6">
+    <div class="w-full max-w-4xl h-[85vh] rounded-2xl glass-modal border t-border-strong shadow-2xl flex flex-col overflow-hidden">
+      <!-- Editor Header -->
+      <div class="px-4 py-2.5 border-b t-border flex items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <i data-lucide="file-code" class="w-4 h-4 t-accent-text shrink-0"></i>
+          <span id="editorFileName" class="font-semibold text-xs t-text-primary truncate">file.txt</span>
+          <span id="editorDirtyDot" class="w-2 h-2 rounded-full bg-amber-400 hidden" title="Unsaved changes"></span>
+          <span id="editorFilePath" class="font-mono text-[10px] t-text-muted px-2 py-0.5 rounded t-bg-base border t-border truncate max-w-xs sm:max-w-md">-</span>
         </div>
-        <button class="modal-close" id="modal-mkdir-close" title="Close">&times;</button>
-      </div>
-      <form id="form-mkdir" class="modal-body">
-        <div class="form-group">
-          <label>Current Path</label>
-          <div id="mkdir-parent-path" class="path-pill">/home/hermes</div>
-        </div>
-        <div class="form-group">
-          <label>Folder Name</label>
-          <input type="text" id="mkdir-input-name" placeholder="e.g. projects or backups" required autocomplete="off">
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="btn-cancel-mkdir">Cancel</button>
-          <button type="submit" class="btn-primary">Create Folder</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal 3: Confirm Delete -->
-  <div id="modal-delete" class="modal-overlay">
-    <div class="modal-box modal-box-sm">
-      <div class="modal-header">
-        <div class="modal-header-title">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ef4444" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-          <h3>Confirm Delete</h3>
-        </div>
-        <button class="modal-close" id="modal-delete-close" title="Close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size:13px; color:var(--text-main); margin-bottom:10px;">Are you sure you want to permanently delete this item?</p>
-        <div id="delete-prompt-msg" class="path-pill delete-target-pill">item</div>
-        <p style="font-size:11px; color:#ef4444; margin-top:8px;">⚠️ This action is irreversible.</p>
-        <div class="modal-footer" style="margin-top:16px;">
-          <button type="button" class="btn-secondary" id="btn-cancel-delete">Cancel</button>
-          <button type="button" class="btn-danger" id="btn-confirm-delete">Delete Permanently</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal 4: File Preview & Editor (OpenCode Style) -->
-  <div id="modal-editor" class="modal-overlay">
-    <div class="modal-box editor-modal-box">
-      <div class="modal-header editor-header">
-        <div class="editor-header-left">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <div class="editor-title-wrap">
-            <span id="editor-filename" class="editor-filename">file.txt</span>
-            <span id="editor-dirty" class="editor-dirty-indicator" style="display:none;" title="Unsaved changes">• Modified</span>
-          </div>
-          <span id="editor-filepath" class="path-pill editor-path-pill">/path/to/file</span>
-        </div>
-        <div class="editor-header-actions">
-          <span id="editor-status" class="editor-status-text"></span>
-          <button id="editor-btn-save" class="btn-primary btn-sm" title="Save changes (Ctrl+S)">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-              <polyline points="17 21 17 13 7 13 7 21"/>
-              <polyline points="7 3 7 8 15 8"/>
-            </svg>
-            <span>Save</span>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="editorSaveBtn" onclick="window.NodeDeck.saveEditedFile()" class="px-3 py-1.5 rounded-lg t-accent-bg font-semibold text-xs flex items-center gap-1.5 shadow-sm smooth-transition">
+            <i data-lucide="save" class="w-3.5 h-3.5"></i>
+            <span>Save (Ctrl+S)</span>
           </button>
-          <button id="editor-btn-download" class="icon-btn" title="Download File">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
+          <button onclick="window.NodeDeck.downloadCurrentFile()" title="Download file" class="p-1.5 rounded-lg t-bg-base border t-border t-text-muted hover:t-text-primary t-hover-bg">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
           </button>
-          <button class="modal-close" id="modal-editor-close" title="Close (Esc)">&times;</button>
+          <button onclick="window.NodeDeck.closeFileEditor()" class="p-1.5 rounded-lg t-hover-bg t-text-muted hover:t-text-primary">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
         </div>
       </div>
-      <div class="editor-container">
-        <div id="editor-line-numbers" class="editor-line-numbers">1</div>
-        <textarea id="editor-textarea" class="editor-textarea" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      <!-- Editor Body -->
+      <div class="flex-1 flex min-h-0 bg-[#080808] font-mono text-xs">
+        <div id="editorLineNumbers" class="w-12 py-3 pr-2 text-right text-zinc-600 select-none overflow-hidden font-mono border-r border-white/5">1</div>
+        <textarea id="editorTextarea" spellcheck="false" autocomplete="off" autocapitalize="off"
+          class="flex-1 p-3 bg-transparent text-zinc-200 outline-none resize-none font-mono text-xs leading-relaxed overflow-y-auto no-scrollbar"></textarea>
       </div>
-      <div class="editor-footer">
-        <span id="editor-info-lines">0 lines</span>
-        <span id="editor-info-size">0 KB</span>
+      <!-- Editor Status Bar -->
+      <div class="h-6 px-3 border-t t-border flex items-center justify-between text-[10px] font-mono t-text-muted shrink-0">
+        <div class="flex items-center gap-3">
+          <span id="editorLineCount">0 lines</span>
+          <span>|</span>
+          <span id="editorFileSize">0 KB</span>
+        </div>
         <span>UTF-8</span>
       </div>
     </div>
   </div>
 
-  <!-- Xterm and Addons -->
+  <!-- =========================================================================
+       CONFIRM DELETE MODAL
+       ========================================================================= -->
+  <div id="confirmDeleteBackdrop" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-2xl glass-modal border border-rose-500/40 shadow-2xl p-4 space-y-3">
+      <div class="flex items-center gap-2.5 text-rose-400 font-semibold text-xs">
+        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+        <span>Confirm Deletion</span>
+      </div>
+      <p class="text-xs t-text-secondary leading-relaxed">Are you sure you want to permanently delete this item?</p>
+      <div id="deleteTargetText" class="p-2 rounded-lg t-bg-base border t-border font-mono text-[11px] t-text-primary truncate">-</div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button onclick="window.NodeDeck.closeDeleteModal()" class="px-3 py-1.5 rounded-lg t-text-muted hover:t-text-primary t-hover-bg text-xs">Cancel</button>
+        <button id="confirmDeleteBtn" class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs smooth-transition">Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST STACK -->
+  <div id="toastStack" class="fixed bottom-8 right-3 z-50 flex flex-col gap-1.5 pointer-events-none"></div>
+
+  <!-- Xterm & Addons -->
   <script src="/vendor/xterm.js"></script>
   <script src="/vendor/addon-fit.js"></script>
   <script src="/vendor/addon-webgl.js"></script>
-  <!-- Main Application -->
-  <script src="/app.js?v=20261113-v4"></script>
+  <!-- Main NodeDeck Logic -->
+  <script src="/app.js?v=20261114-v13"></script>
 </body>
 </html>
