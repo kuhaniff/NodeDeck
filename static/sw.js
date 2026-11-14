@@ -1,9 +1,11 @@
-const CACHE_NAME = 'nodedeck-cache-v4';
+const CACHE_NAME = 'nodedeck-cache-v13';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20261113-v4',
-  '/app.js?v=20261113-v4',
+  '/style.css?v=20261114-v13',
+  '/app.js?v=20261114-v13',
+  '/vendor/tailwindcss.js',
+  '/vendor/lucide.js',
   '/vendor/xterm.js',
   '/vendor/xterm.css',
   '/vendor/addon-fit.js',
