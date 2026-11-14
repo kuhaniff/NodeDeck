@@ -277,6 +277,10 @@
   async function fetchHosts() {
     try {
       const res = await fetch('/api/hosts');
+      if (res.status === 401) {
+        showLoginScreen();
+        return;
+      }
       if (res.ok) {
         state.hosts = await res.json();
         renderLeftSidebarContent();
@@ -315,6 +319,10 @@
     renderLeftSidebarContent();
     try {
       const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
+      if (res.status === 401) {
+        showLoginScreen();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         state.sftpPath = data.current || path;
@@ -2191,6 +2199,142 @@
   }
 
   // 15. PUBLIC EXPORTS FOR INLINE ONCLICK HANDLERS
+  // 15b. AUTHENTICATION & LOCK SCREEN
+  async function checkAuthStatus() {
+    try {
+      const res = await fetch('/api/auth/status');
+      if (res.ok) {
+        const data = await res.json();
+        const lockBtn = document.getElementById('lockSessionBtn');
+        if (data.auth_required) {
+          if (lockBtn) lockBtn.classList.remove('hidden');
+          if (!data.authenticated) {
+            showLoginScreen();
+            return false;
+          }
+        } else {
+          if (lockBtn) lockBtn.classList.add('hidden');
+        }
+      }
+    } catch (e) {
+      console.warn('Auth check failed:', e);
+    }
+    hideLoginScreen();
+    return true;
+  }
+
+  function showLoginScreen() {
+    const el = document.getElementById('loginScreen');
+    if (el) {
+      el.classList.remove('hidden');
+      el.classList.remove('opacity-0');
+      const pass = document.getElementById('loginPasswordInput');
+      if (pass) {
+        pass.value = '';
+        setTimeout(() => pass.focus(), 150);
+      }
+      const errBanner = document.getElementById('loginErrorBanner');
+      if (errBanner) errBanner.classList.add('hidden');
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  function hideLoginScreen() {
+    const el = document.getElementById('loginScreen');
+    if (el && !el.classList.contains('hidden')) {
+      el.classList.add('smooth-transition', 'opacity-0');
+      setTimeout(() => {
+        el.classList.add('hidden');
+        el.classList.remove('opacity-0');
+      }, 250);
+    }
+  }
+
+  function toggleLoginPasswordEye() {
+    const input = document.getElementById('loginPasswordInput');
+    const icon = document.getElementById('loginEyeIcon');
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (icon) icon.setAttribute('data-lucide', 'eye-off');
+    } else {
+      input.type = 'password';
+      if (icon) icon.setAttribute('data-lucide', 'eye');
+    }
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  async function submitLogin(e) {
+    if (e) e.preventDefault();
+    const passInput = document.getElementById('loginPasswordInput');
+    const rememberCheck = document.getElementById('loginRememberCheck');
+    const errBanner = document.getElementById('loginErrorBanner');
+    const errText = document.getElementById('loginErrorText');
+    const submitBtn = document.getElementById('loginSubmitBtn');
+    const btnText = document.getElementById('loginBtnText');
+
+    if (!passInput) return;
+    const password = passInput.value;
+    const remember = rememberCheck ? rememberCheck.checked : true;
+
+    if (errBanner) errBanner.classList.add('hidden');
+    if (submitBtn) submitBtn.disabled = true;
+    if (btnText) btnText.textContent = 'Verifying…';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, remember })
+      });
+      if (res.ok) {
+        toast('Welcome back to NodeDeck', 'success');
+        hideLoginScreen();
+        // Boot workspace data
+        fetchHosts();
+        fetchFsList(state.sftpPath);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (errBanner) {
+          errBanner.classList.remove('hidden');
+          if (errText) errText.textContent = data.error || 'Incorrect password. Please try again.';
+          if (window.lucide) window.lucide.createIcons();
+        }
+        passInput.classList.add('ring-2', 'ring-rose-500/50', 'border-rose-500');
+        setTimeout(() => {
+          passInput.classList.remove('ring-2', 'ring-rose-500/50', 'border-rose-500');
+        }, 1500);
+        passInput.focus();
+        passInput.select();
+      }
+    } catch (err) {
+      if (errBanner) {
+        errBanner.classList.remove('hidden');
+        if (errText) errText.textContent = 'Connection error: ' + err.message;
+        if (window.lucide) window.lucide.createIcons();
+      }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      if (btnText) btnText.textContent = 'Sign In';
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  async function logoutSession() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    toast('Session locked', 'info');
+    // Disconnect any active terminal sessions
+    state.termTabs.forEach(t => {
+      if (t.ws) {
+        t.closing = true;
+        t.ws.close();
+      }
+    });
+    showLoginScreen();
+  }
+
   window.NodeDeck = {
     state,
     applyTheme,
@@ -2239,7 +2383,11 @@
     handleFileUpload,
     openCommandPalette,
     closeCommandPalette,
-    runPaletteEntry
+    runPaletteEntry,
+    submitLogin,
+    toggleLoginPasswordEye,
+    logoutSession,
+    showLoginScreen
   };
 
   // 16. BOOT APPLICATION
@@ -2247,7 +2395,11 @@
   renderAll();
   initMobileKeys();
   initSidebarResizer();
-  fetchHosts();
-  fetchFsList(state.sftpPath);
+  checkAuthStatus().then(authenticated => {
+    if (authenticated) {
+      fetchHosts();
+      fetchFsList(state.sftpPath);
+    }
+  });
 
 })();

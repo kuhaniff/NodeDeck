@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -156,7 +158,56 @@ var (
 	tempSessions    sync.Map // map[string]HostItem
 	hostsMu         sync.Mutex
 	dataDirGlobal   string
+	authPassword    string
+	authSessions    sync.Map // map[string]time.Time (token -> expiration)
 )
+
+func generateAuthToken() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func isAuthValid(r *http.Request) bool {
+	if authPassword == "" {
+		return true
+	}
+
+	// 1. Check Cookie
+	if cookie, err := r.Cookie("nodedeck_session"); err == nil && cookie.Value != "" {
+		if expVal, ok := authSessions.Load(cookie.Value); ok {
+			if exp, ok := expVal.(time.Time); ok && time.Now().Before(exp) {
+				return true
+			}
+			authSessions.Delete(cookie.Value)
+		}
+	}
+
+	// 2. Check Authorization Header (Bearer <token>)
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if expVal, ok := authSessions.Load(token); ok {
+			if exp, ok := expVal.(time.Time); ok && time.Now().Before(exp) {
+				return true
+			}
+			authSessions.Delete(token)
+		}
+	}
+
+	// 3. Check Query parameter ?token=<token>
+	tokenQuery := r.URL.Query().Get("token")
+	if tokenQuery != "" {
+		if expVal, ok := authSessions.Load(tokenQuery); ok {
+			if exp, ok := expVal.(time.Time); ok && time.Now().Before(exp) {
+				return true
+			}
+			authSessions.Delete(tokenQuery)
+		}
+	}
+
+	return false
+}
 
 func getEnv(key, fallback string) string {
 	if val := os.Getenv(key); val != "" {
@@ -255,6 +306,80 @@ func main() {
 		homeDir = getEnv("HOME", "/root")
 	}
 
+	authPassword = getEnv("AUTH_PASSWORD", getEnv("PASSWORD", getEnv("NODEDECK_PASSWORD", "")))
+
+	// Auth Endpoints
+	http.HandleFunc("/api/auth/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"auth_required": authPassword != "",
+			"authenticated": isAuthValid(r),
+		})
+	})
+
+	http.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if authPassword == "" {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+			return
+		}
+		var payload struct {
+			Password string `json:"password"`
+			Remember bool   `json:"remember"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, `{"error":"Invalid request"}`, http.StatusBadRequest)
+			return
+		}
+		if payload.Password != authPassword {
+			http.Error(w, `{"error":"Invalid password"}`, http.StatusUnauthorized)
+			return
+		}
+
+		token := generateAuthToken()
+		duration := 24 * time.Hour
+		maxAge := 0 // session cookie
+		if payload.Remember {
+			duration = 30 * 24 * time.Hour
+			maxAge = 30 * 86400
+		}
+		authSessions.Store(token, time.Now().Add(duration))
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "nodedeck_session",
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   maxAge,
+		})
+
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"token":   token,
+		})
+	})
+
+	http.HandleFunc("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if cookie, err := r.Cookie("nodedeck_session"); err == nil && cookie.Value != "" {
+			authSessions.Delete(cookie.Value)
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "nodedeck_session",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   -1,
+		})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	})
+
 	// 1. Static Web Assets with No-Cache for dev/hot updates
 	fileServer := http.FileServer(http.Dir(*staticDir))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +395,10 @@ func main() {
 	// 2. Hosts Management REST API
 	http.HandleFunc("/api/hosts", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			hosts := loadHosts()
@@ -329,6 +458,10 @@ func main() {
 	// 2b. Ad-hoc / Quick-Connect Session Endpoint
 	http.HandleFunc("/api/session/create", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -348,6 +481,10 @@ func main() {
 	// 3. File Explorer & Transfer REST API (/api/fs)
 	http.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		reqPath := r.URL.Query().Get("path")
 		if reqPath == "" {
 			http.Error(w, "path required", http.StatusBadRequest)
@@ -389,6 +526,10 @@ func main() {
 
 	http.HandleFunc("/api/fs/read", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		reqPath := filepath.Clean(r.URL.Query().Get("path"))
 		if reqPath == "" || isBlockedFsPath(reqPath) {
 			http.Error(w, "access denied", http.StatusForbidden)
@@ -442,6 +583,10 @@ func main() {
 	})
 
 	http.HandleFunc("/api/fs/save", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -477,6 +622,10 @@ func main() {
 	})
 
 	http.HandleFunc("/api/fs/download", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		targetFile := filepath.Clean(r.URL.Query().Get("path"))
 		if targetFile == "" || isBlockedFsPath(targetFile) {
 			http.Error(w, "access denied", http.StatusForbidden)
@@ -492,6 +641,10 @@ func main() {
 	})
 
 	http.HandleFunc("/api/fs/upload", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		targetDir := filepath.Clean(r.URL.Query().Get("path"))
 		if targetDir == "" || isBlockedFsPath(targetDir) {
 			http.Error(w, "access denied", http.StatusForbidden)
@@ -533,6 +686,10 @@ func main() {
 	})
 
 	http.HandleFunc("/api/fs/mkdir", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		targetPath := r.URL.Query().Get("path")
 		if targetPath == "" && r.Body != nil {
 			var bodyData struct {
@@ -555,6 +712,10 @@ func main() {
 	})
 
 	http.HandleFunc("/api/fs/delete", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		targetPath := filepath.Clean(r.URL.Query().Get("path"))
 		if targetPath == "" || targetPath == "/" || isBlockedFsPath(targetPath) {
 			http.Error(w, "protected path", http.StatusForbidden)
@@ -570,6 +731,10 @@ func main() {
 
 	// 4. Session Termination API
 	http.HandleFunc("/api/close", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		tabID := sanitizeID(r.URL.Query().Get("id"))
 		if val, ok := managedSessions.Load(tabID); ok {
 			sess := val.(*ManagedSession)
@@ -595,6 +760,10 @@ func main() {
 
 	// 5. WebSocket Terminal Dispatcher with Session Persistence & Heartbeat (/ws?id=...&host=...&session=...)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		if !isAuthValid(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		tabID := sanitizeID(r.URL.Query().Get("id"))
 		sessionID := r.URL.Query().Get("session")
 		hostID := r.URL.Query().Get("host")

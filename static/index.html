@@ -161,6 +161,12 @@
           </button>
         </div>
       </div>
+
+      <!-- Lock / Sign Out Button -->
+      <button id="lockSessionBtn" onclick="window.NodeDeck.logoutSession()" title="Lock Session / Sign Out"
+        class="hidden w-7 h-7 rounded-lg flex items-center justify-center t-text-muted hover:text-rose-400 t-hover-bg border border-transparent hover:t-border smooth-transition">
+        <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+      </button>
     </div>
   </header>
 
@@ -399,6 +405,113 @@
 
   <!-- TOAST STACK -->
   <div id="toastStack" class="fixed bottom-8 right-3 z-50 flex flex-col gap-1.5 pointer-events-none"></div>
+
+  <!-- =========================================================================
+       LOGIN PAGE OVERLAY (Password-only Authentication matching design)
+       ========================================================================= -->
+  <div id="loginScreen" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center p-4 bg-[#030712] select-none overflow-hidden">
+    <!-- Ambient Cyber Glows -->
+    <div class="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-gradient-to-b from-sky-500/15 via-blue-600/10 to-transparent blur-[120px] rounded-full"></div>
+    <div class="pointer-events-none absolute -bottom-40 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-t from-sky-500/15 via-blue-700/10 to-transparent blur-[140px] rounded-full"></div>
+    
+    <!-- Cyber Wave Graphic at Bottom -->
+    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-64 sm:h-80 overflow-hidden opacity-40">
+      <svg class="w-full h-full" viewBox="0 0 1440 320" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+        <path d="M0,160 C320,300 420,100 720,200 C1020,300 1120,120 1440,220 L1440,320 L0,320 Z" fill="url(#waveGrad1)" opacity="0.25"/>
+        <path d="M0,200 C360,80 520,280 880,180 C1140,100 1280,240 1440,190" stroke="url(#waveStroke1)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M0,230 C280,140 600,290 960,190 C1200,120 1320,260 1440,210" stroke="url(#waveStroke2)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.6"/>
+        <defs>
+          <linearGradient id="waveGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#0284c7" stop-opacity="0.2"/>
+            <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.2"/>
+          </linearGradient>
+          <linearGradient id="waveStroke1" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#0284c7" stop-opacity="0.1"/>
+            <stop offset="35%" stop-color="#38bdf8" stop-opacity="0.9"/>
+            <stop offset="70%" stop-color="#60a5fa" stop-opacity="0.8"/>
+            <stop offset="100%" stop-color="#0284c7" stop-opacity="0.1"/>
+          </linearGradient>
+          <linearGradient id="waveStroke2" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.7"/>
+            <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+
+    <!-- Center Content -->
+    <div class="relative z-10 w-full max-w-[420px] flex flex-col items-center">
+      <!-- Top Branding: >_ NodeDeck CONTROL YOUR FLEET. -->
+      <div class="flex flex-col items-center mb-8">
+        <div class="flex items-center gap-3">
+          <span class="text-4xl font-mono font-black text-[#00E5FF] tracking-tighter drop-shadow-[0_0_15px_rgba(0,229,255,0.6)]">&gt;_</span>
+          <h1 class="text-3xl font-extrabold tracking-tight">
+            <span class="text-white">Node</span><span class="bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">Deck</span>
+          </h1>
+        </div>
+        <p class="mt-2 text-[10px] font-mono tracking-[0.28em] text-zinc-400 font-semibold uppercase">Control Your Fleet.</p>
+      </div>
+
+      <!-- Card Container -->
+      <div class="w-full rounded-2xl bg-[#0a1224]/85 border border-sky-500/20 backdrop-blur-xl p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.85),0_0_40px_rgba(14,165,233,0.12)]">
+        <div class="text-center mb-6">
+          <h2 class="text-lg font-semibold text-white tracking-tight">Welcome Back</h2>
+          <p class="text-xs text-zinc-400 mt-1">Sign in to your NodeDeck workspace</p>
+        </div>
+
+        <form id="loginForm" onsubmit="window.NodeDeck.submitLogin(event)" class="space-y-4">
+          <!-- Password Input -->
+          <div class="space-y-1.5">
+            <div class="relative">
+              <i data-lucide="lock" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"></i>
+              <input type="password" id="loginPasswordInput" autocomplete="current-password" required
+                placeholder="Password"
+                class="w-full bg-[#080e1c] border border-zinc-800 focus:border-sky-500/80 focus:ring-2 focus:ring-sky-500/25 rounded-xl pl-10 pr-10 py-3 text-xs text-zinc-100 placeholder-zinc-500 outline-none transition-all duration-200">
+              <button type="button" id="loginEyeBtn" onclick="window.NodeDeck.toggleLoginPasswordEye()" tabindex="-1"
+                class="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                <i id="loginEyeIcon" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Error Alert Banner -->
+          <div id="loginErrorBanner" class="hidden px-3 py-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+            <i data-lucide="alert-circle" class="w-3.5 h-3.5 shrink-0"></i>
+            <span id="loginErrorText">Incorrect password</span>
+          </div>
+
+          <!-- Remember Me Checkbox -->
+          <div class="flex items-center justify-between pt-1">
+            <label class="flex items-center gap-2 cursor-pointer select-none text-xs text-zinc-400 hover:text-zinc-200">
+              <input type="checkbox" id="loginRememberCheck" checked
+                class="w-3.5 h-3.5 rounded bg-zinc-900 border-zinc-700 text-sky-500 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+              <span>Remember me</span>
+            </label>
+            <span class="text-[10px] text-zinc-600 font-mono">Password only</span>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" id="loginSubmitBtn"
+            class="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-sky-400 via-blue-500 to-blue-600 hover:from-sky-300 hover:via-blue-400 hover:to-blue-500 active:scale-[0.99] text-white font-medium text-xs shadow-[0_0_20px_rgba(14,165,233,0.35)] hover:shadow-[0_0_25px_rgba(14,165,233,0.55)] transition-all flex items-center justify-center gap-2 group">
+            <span id="loginBtnText">Sign In</span>
+            <i id="loginBtnIcon" data-lucide="arrow-right" class="w-3.5 h-3.5 transition-transform group-hover:translate-x-1"></i>
+          </button>
+        </form>
+
+        <!-- Card Footer -->
+        <div class="flex items-center gap-3 mt-7 text-[10px] font-mono tracking-wider text-zinc-500">
+          <div class="h-[1px] flex-1 bg-zinc-800"></div>
+          <span>Secure • Simple • Your Fleet</span>
+          <div class="h-[1px] flex-1 bg-zinc-800"></div>
+        </div>
+      </div>
+
+      <!-- Page Bottom Subtitle -->
+      <p class="mt-6 text-[10px] font-mono tracking-widest text-zinc-600 uppercase">NodeDeck · Control Your Fleet.</p>
+    </div>
+  </div>
 
   <!-- Xterm & Addons -->
   <script src="/vendor/xterm.js"></script>
