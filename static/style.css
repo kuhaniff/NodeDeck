@@ -1,4 +1,23 @@
 /* =========================================================================
+   JetBrains Mono Nerd Font Definition
+   ========================================================================= */
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('/vendor/fonts/JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('/vendor/fonts/JetBrainsMonoNerdFont-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =========================================================================
    NodeDeck v3/v4 Design System — 4 Exact Deep-Dark Terminal Themes
    Coolnight, CutiePro, Monokai Remastered, Fahrenheit
    ========================================================================= */
