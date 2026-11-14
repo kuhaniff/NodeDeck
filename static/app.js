@@ -185,6 +185,7 @@
     termTabs: [], // array of tab objects
 
     // SFTP State
+    sftpHostId: localStorage.getItem('nodedeck_sftp_active_host') || 'local',
     sftpPath: localStorage.getItem('nodedeck_last_sftp_path') || '/home',
     sftpItems: [],
     sftpLoading: false,
@@ -318,7 +319,8 @@
     state.sftpLoading = true;
     renderLeftSidebarContent();
     try {
-      const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
+      const hostParam = state.sftpHostId && state.sftpHostId !== 'local' ? `&host_id=${encodeURIComponent(state.sftpHostId)}` : '';
+      const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}${hostParam}`);
       if (res.status === 401) {
         showLoginScreen();
         return;
@@ -329,12 +331,13 @@
         try { localStorage.setItem('nodedeck_last_sftp_path', state.sftpPath); } catch (e) {}
         state.sftpItems = data.items || [];
       } else {
+        const errText = await res.text();
         // Fallback to / if path is invalid or unaccessible
-        if (path !== '/') {
-          toast('Directory not accessible, returning to root', 'warn');
-          return fetchFsList('/');
+        if (path !== '/' && path !== '/home') {
+          toast('Directory not accessible, returning to /home', 'warn');
+          return fetchFsList('/home');
         }
-        toast('Cannot open directory', 'error');
+        toast('Cannot open directory: ' + errText, 'error');
       }
     } catch (e) {
       toast('SFTP Error: ' + e.message, 'error');
@@ -1037,8 +1040,30 @@
         return state.sftpSortAsc ? ' ↑' : ' ↓';
       };
 
+      const isRemote = state.sftpHostId && state.sftpHostId !== 'local';
+      const activeHostObj = state.hosts.find(h => h.id === state.sftpHostId);
+
       container.innerHTML = `
         <div class="p-2 space-y-2 border-b t-border shrink-0">
+          <!-- Server / Host Selector for SFTP -->
+          <div class="flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg t-bg-base border t-border">
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+              <span class="w-2 h-2 rounded-full ${isRemote ? 'bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.75)]' : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.75)]'} shrink-0"></span>
+              <select onchange="window.NodeDeck.switchSftpHost(this.value)"
+                class="w-full bg-transparent t-text-primary text-[11px] font-mono outline-none cursor-pointer truncate">
+                <option value="local" ${!isRemote ? 'selected' : ''} class="bg-[#0b1329] text-white">Local Server (Host)</option>
+                ${state.hosts.map(h => `
+                  <option value="${h.id}" ${state.sftpHostId === h.id ? 'selected' : ''} class="bg-[#0b1329] text-white">
+                    ${escapeHtml(h.name || h.host)} (${h.user || 'root'}@${h.host})
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+            <span class="text-[9px] font-mono px-1.5 py-0.2 rounded border uppercase ${isRemote ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'} shrink-0">
+              ${isRemote ? 'REMOTE SFTP' : 'LOCAL'}
+            </span>
+          </div>
+
           <!-- Dynamic Breadcrumbs & Action Bar -->
           <div class="flex items-center justify-between gap-1 px-2 py-1.5 rounded-lg t-bg-base border t-border font-mono text-[11px]">
             <div id="breadcrumbScrollContainer" class="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1 whitespace-nowrap">
@@ -1728,6 +1753,20 @@
     document.getElementById('confirmDeleteBackdrop').classList.add('hidden');
   }
 
+  function switchSftpHost(hostId) {
+    state.sftpHostId = hostId || 'local';
+    try { localStorage.setItem('nodedeck_sftp_active_host', state.sftpHostId); } catch (e) {}
+
+    const target = state.hosts.find(h => h.id === hostId);
+    if (target && target.user && target.user !== 'root') {
+      state.sftpPath = '/home/' + target.user;
+    } else {
+      state.sftpPath = '/home';
+    }
+    state.sftpItems = [];
+    fetchFsList(state.sftpPath);
+  }
+
   function promptDeleteSftpItem(name, path, isDir, e) {
     if (e) e.stopPropagation();
     closeAllPopups();
@@ -1736,7 +1775,8 @@
     const btn = document.getElementById('confirmDeleteBtn');
     btn.onclick = async () => {
       try {
-        const res = await fetch(`/api/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+        const hostParam = state.sftpHostId && state.sftpHostId !== 'local' ? `&host_id=${encodeURIComponent(state.sftpHostId)}` : '';
+        const res = await fetch(`/api/fs/delete?path=${encodeURIComponent(path)}${hostParam}`, { method: 'DELETE' });
         if (res.ok) {
           closeDeleteModal();
           toast(`Deleted ${name}`, 'warn');
@@ -1781,7 +1821,8 @@
   function downloadFilePath(path, e) {
     if (e) e.stopPropagation();
     const a = document.createElement('a');
-    a.href = `/api/fs/download?path=${encodeURIComponent(path)}`;
+    const hostParam = state.sftpHostId && state.sftpHostId !== 'local' ? `&host_id=${encodeURIComponent(state.sftpHostId)}` : '';
+    a.href = `/api/fs/download?path=${encodeURIComponent(path)}${hostParam}`;
     a.download = path.split('/').pop() || 'download';
     document.body.appendChild(a);
     a.click();
@@ -1796,7 +1837,8 @@
 
   async function openFileInEditor(path) {
     try {
-      const res = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}`);
+      const hostParam = state.sftpHostId && state.sftpHostId !== 'local' ? `&host_id=${encodeURIComponent(state.sftpHostId)}` : '';
+      const res = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}${hostParam}`);
       if (!res.ok) {
         const err = await res.text();
         toast('Cannot open file: ' + err, 'error');
@@ -1832,10 +1874,11 @@
     if (!state.editorPath) return;
     const content = document.getElementById('editorTextarea').value;
     try {
-      const res = await fetch('/api/fs/save', {
+      const hostParam = state.sftpHostId && state.sftpHostId !== 'local' ? `&host_id=${encodeURIComponent(state.sftpHostId)}` : '';
+      const res = await fetch(`/api/fs/save?${hostParam}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: state.editorPath, content })
+        body: JSON.stringify({ path: state.editorPath, content, host_id: state.sftpHostId || '' })
       });
       if (res.ok) {
         state.editorIsDirty = false;
@@ -1877,7 +1920,8 @@
       const formData = new FormData();
       formData.append('file', file);
       try {
-        const res = await fetch(`/api/fs/upload?path=${encodeURIComponent(state.sftpPath)}`, {
+        const hostParam = state.sftpHostId && state.sftpHostId !== 'local' ? `&host_id=${encodeURIComponent(state.sftpHostId)}` : '';
+        const res = await fetch(`/api/fs/upload?path=${encodeURIComponent(state.sftpPath)}${hostParam}`, {
           method: 'POST',
           body: formData
         });
@@ -2374,6 +2418,7 @@
     navigateSftpUp,
     refreshSftp,
     setSftpSort,
+    switchSftpHost,
     togglePinCurrentFolder,
     onSftpItemClick,
     downloadFilePath,

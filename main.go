@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +23,8 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
 var upgrader = websocket.Upgrader{
@@ -286,6 +290,159 @@ func isBlockedFsPath(path string) bool {
 	return false
 }
 
+type PooledSFTP struct {
+	mu         sync.Mutex
+	sshClient  *ssh.Client
+	sftpClient *sftp.Client
+	updatedAt  time.Time
+}
+
+var sftpPool sync.Map // map[string]*PooledSFTP (hostID -> *PooledSFTP)
+
+func getSFTPClient(hostID string) (*sftp.Client, error) {
+	if hostID == "" || hostID == "local" {
+		return nil, nil // local filesystem
+	}
+
+	hosts := loadHosts()
+	var targetHost *HostItem
+	for i := range hosts {
+		if hosts[i].ID == hostID {
+			targetHost = &hosts[i]
+			break
+		}
+	}
+	if targetHost == nil {
+		if val, ok := tempSessions.Load(hostID); ok {
+			h := val.(HostItem)
+			targetHost = &h
+		}
+	}
+	if targetHost == nil {
+		return nil, fmt.Errorf("host not found: %s", hostID)
+	}
+	if targetHost.Type == "local" {
+		return nil, nil
+	}
+
+	val, _ := sftpPool.LoadOrStore(hostID, &PooledSFTP{})
+	pooled := val.(*PooledSFTP)
+
+	pooled.mu.Lock()
+	defer pooled.mu.Unlock()
+
+	// Check if existing SFTP client is healthy
+	if pooled.sftpClient != nil {
+		if _, err := pooled.sftpClient.Getwd(); err == nil {
+			pooled.updatedAt = time.Now()
+			return pooled.sftpClient, nil
+		}
+		_ = pooled.sftpClient.Close()
+		if pooled.sshClient != nil {
+			_ = pooled.sshClient.Close()
+		}
+		pooled.sftpClient = nil
+		pooled.sshClient = nil
+	}
+
+	var authMethods []ssh.AuthMethod
+	if targetHost.Auth == "password" && targetHost.Password != "" {
+		authMethods = append(authMethods, ssh.Password(targetHost.Password))
+	}
+
+	if targetHost.KeyPath != "" {
+		if keyBytes, err := os.ReadFile(targetHost.KeyPath); err == nil {
+			if signer, err := ssh.ParsePrivateKey(keyBytes); err == nil {
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
+			}
+		}
+	}
+
+	// Check standard user keys
+	standardKeys := []string{
+		"/home/hermes/.ssh/id_ed25519",
+		"/home/hermes/.ssh/id_rsa",
+		"/home/ubuntu/.ssh/id_ed25519",
+		"/home/ubuntu/.ssh/id_rsa",
+		filepath.Join(os.Getenv("HOME"), ".ssh", "id_ed25519"),
+		filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"),
+	}
+	for _, kPath := range standardKeys {
+		if keyBytes, err := os.ReadFile(kPath); err == nil {
+			if signer, err := ssh.ParsePrivateKey(keyBytes); err == nil {
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
+			}
+		}
+	}
+
+	// Ephemeral ed25519 key fallback (useful for Tailscale SSH node-to-node)
+	if len(authMethods) == 0 || targetHost.Auth == "key" {
+		if _, priv, err := ed25519.GenerateKey(rand.Reader); err == nil {
+			if signer, err := ssh.NewSignerFromKey(priv); err == nil {
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
+			}
+		}
+	}
+
+	port := targetHost.Port
+	if port <= 0 {
+		port = 22
+	}
+	sshUser := targetHost.User
+	if sshUser == "" {
+		sshUser = "root"
+	}
+	sshHost := targetHost.Host
+	if sshHost == "" {
+		sshHost = "127.0.0.1"
+	}
+
+	config := &ssh.ClientConfig{
+		User:            sshUser,
+		Auth:            authMethods,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         8 * time.Second,
+	}
+
+	addr := net.JoinHostPort(sshHost, strconv.Itoa(port))
+	conn, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		return nil, fmt.Errorf("ssh dial to %s (%s) failed: %w", targetHost.Name, addr, err)
+	}
+
+	client, err := sftp.NewClient(conn)
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("sftp handshake failed: %w", err)
+	}
+
+	pooled.sshClient = conn
+	pooled.sftpClient = client
+	pooled.updatedAt = time.Now()
+	return client, nil
+}
+
+func sftpRemoveAll(client *sftp.Client, targetPath string) error {
+	fi, err := client.Lstat(targetPath)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return client.Remove(targetPath)
+	}
+	entries, err := client.ReadDir(targetPath)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		sub := filepath.ToSlash(filepath.Join(targetPath, entry.Name()))
+		if err := sftpRemoveAll(client, sub); err != nil {
+			return err
+		}
+	}
+	return client.RemoveDirectory(targetPath)
+}
+
 func main() {
 	port := flag.String("port", getEnv("PORT", "8090"), "HTTP port to listen")
 	staticDir := flag.String("static", getEnv("STATIC_DIR", "./static"), "Path to static assets")
@@ -478,7 +635,7 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]string{"session_id": item.ID})
 	})
 
-	// 3. File Explorer & Transfer REST API (/api/fs)
+	// 3. File Explorer & Transfer REST API (/api/fs) - Supports both Local and Remote SFTP over SSH
 	http.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if !isAuthValid(r) {
@@ -496,9 +653,10 @@ func main() {
 			return
 		}
 
-		entries, err := os.ReadDir(reqPath)
+		hostID := r.URL.Query().Get("host_id")
+		sftpClient, err := getSFTPClient(hostID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -506,6 +664,32 @@ func main() {
 			Current: reqPath,
 			Parent:  filepath.Dir(reqPath),
 			Items:   []FileItem{},
+		}
+
+		if sftpClient != nil {
+			entries, err := sftpClient.ReadDir(reqPath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			for _, entry := range entries {
+				resp.Items = append(resp.Items, FileItem{
+					Name:    entry.Name(),
+					IsDir:   entry.IsDir(),
+					Size:    entry.Size(),
+					ModTime: entry.ModTime().Format("2006-01-02 15:04"),
+					Path:    filepath.ToSlash(filepath.Join(reqPath, entry.Name())),
+				})
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Local filesystem fallback
+		entries, err := os.ReadDir(reqPath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		for _, entry := range entries {
@@ -535,6 +719,68 @@ func main() {
 			http.Error(w, "access denied", http.StatusForbidden)
 			return
 		}
+
+		hostID := r.URL.Query().Get("host_id")
+		sftpClient, err := getSFTPClient(hostID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		const maxEditSize = 2 * 1024 * 1024 // 2MB
+
+		if sftpClient != nil {
+			info, err := sftpClient.Stat(reqPath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			if info.IsDir() {
+				http.Error(w, "path is a directory", http.StatusBadRequest)
+				return
+			}
+			if info.Size() > maxEditSize {
+				http.Error(w, "file is too large to edit in browser (max 2MB)", http.StatusRequestEntityTooLarge)
+				return
+			}
+			f, err := sftpClient.Open(reqPath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer f.Close()
+			data, err := io.ReadAll(f)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			isBinary := false
+			checkLen := len(data)
+			if checkLen > 512 {
+				checkLen = 512
+			}
+			for i := 0; i < checkLen; i++ {
+				if data[i] == 0 {
+					isBinary = true
+					break
+				}
+			}
+			resp := map[string]interface{}{
+				"path":      reqPath,
+				"name":      filepath.Base(reqPath),
+				"size":      info.Size(),
+				"is_binary": isBinary,
+				"content":   string(data),
+			}
+			if isBinary {
+				resp["content"] = ""
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Local filesystem fallback
 		info, err := os.Stat(reqPath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -544,7 +790,6 @@ func main() {
 			http.Error(w, "path is a directory", http.StatusBadRequest)
 			return
 		}
-		const maxEditSize = 2 * 1024 * 1024 // 2MB
 		if info.Size() > maxEditSize {
 			http.Error(w, "file is too large to edit in browser (max 2MB)", http.StatusRequestEntityTooLarge)
 			return
@@ -594,6 +839,7 @@ func main() {
 		var payload struct {
 			Path    string `json:"path"`
 			Content string `json:"content"`
+			HostID  string `json:"host_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -604,6 +850,34 @@ func main() {
 			http.Error(w, "access denied", http.StatusForbidden)
 			return
 		}
+
+		hostID := payload.HostID
+		if hostID == "" {
+			hostID = r.URL.Query().Get("host_id")
+		}
+		sftpClient, err := getSFTPClient(hostID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if sftpClient != nil {
+			f, err := sftpClient.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer f.Close()
+			if _, err := f.Write([]byte(payload.Content)); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"saved"}`))
+			return
+		}
+
+		// Local filesystem fallback
 		info, err := os.Stat(targetPath)
 		if err == nil && info.IsDir() {
 			http.Error(w, "target is a directory", http.StatusBadRequest)
@@ -631,6 +905,32 @@ func main() {
 			http.Error(w, "access denied", http.StatusForbidden)
 			return
 		}
+
+		hostID := r.URL.Query().Get("host_id")
+		sftpClient, err := getSFTPClient(hostID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if sftpClient != nil {
+			info, err := sftpClient.Stat(targetFile)
+			if err != nil || info.IsDir() {
+				http.Error(w, "invalid file", http.StatusNotFound)
+				return
+			}
+			f, err := sftpClient.Open(targetFile)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer f.Close()
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(targetFile)))
+			_, _ = io.Copy(w, f)
+			return
+		}
+
+		// Local filesystem fallback
 		info, err := os.Stat(targetFile)
 		if err != nil || info.IsDir() {
 			http.Error(w, "invalid file", http.StatusNotFound)
@@ -648,6 +948,13 @@ func main() {
 		targetDir := filepath.Clean(r.URL.Query().Get("path"))
 		if targetDir == "" || isBlockedFsPath(targetDir) {
 			http.Error(w, "access denied", http.StatusForbidden)
+			return
+		}
+
+		hostID := r.URL.Query().Get("host_id")
+		sftpClient, err := getSFTPClient(hostID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -671,14 +978,25 @@ func main() {
 				continue
 			}
 
-			dstPath := filepath.Join(targetDir, filepath.Base(filename))
-			dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+			if sftpClient != nil {
+				dstPath := filepath.ToSlash(filepath.Join(targetDir, filepath.Base(filename)))
+				dst, err := sftpClient.Create(dstPath)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				_, _ = io.Copy(dst, part)
+				_ = dst.Close()
+			} else {
+				dstPath := filepath.Join(targetDir, filepath.Base(filename))
+				dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				_, _ = io.Copy(dst, part)
+				dst.Close()
 			}
-			_, _ = io.Copy(dst, part)
-			dst.Close()
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -691,18 +1009,41 @@ func main() {
 			return
 		}
 		targetPath := r.URL.Query().Get("path")
+		hostID := r.URL.Query().Get("host_id")
 		if targetPath == "" && r.Body != nil {
 			var bodyData struct {
-				Path string `json:"path"`
+				Path   string `json:"path"`
+				HostID string `json:"host_id"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&bodyData)
 			targetPath = bodyData.Path
+			if hostID == "" {
+				hostID = bodyData.HostID
+			}
 		}
 		targetPath = filepath.Clean(targetPath)
 		if targetPath == "" || targetPath == "." {
 			http.Error(w, "path required", http.StatusBadRequest)
 			return
 		}
+
+		sftpClient, err := getSFTPClient(hostID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if sftpClient != nil {
+			if err := sftpClient.MkdirAll(targetPath); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"created"}`))
+			return
+		}
+
+		// Local filesystem fallback
 		if err := os.MkdirAll(targetPath, 0755); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -721,6 +1062,25 @@ func main() {
 			http.Error(w, "protected path", http.StatusForbidden)
 			return
 		}
+
+		hostID := r.URL.Query().Get("host_id")
+		sftpClient, err := getSFTPClient(hostID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("SFTP connection error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if sftpClient != nil {
+			if err := sftpRemoveAll(sftpClient, targetPath); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"deleted"}`))
+			return
+		}
+
+		// Local filesystem fallback
 		if err := os.RemoveAll(targetPath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
