@@ -1188,7 +1188,7 @@ body.resizing-sidebar #sidebar {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background-color: #121620;
+  background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
@@ -1196,8 +1196,8 @@ body.resizing-sidebar #sidebar {
 }
 
 .dash-host-item:hover {
-  background-color: #1b212f;
-  border-color: rgba(59, 130, 246, 0.4);
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-focus);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }

@@ -200,9 +200,14 @@ func saveHostsInternal(hosts []HostItem) error {
 	dataFile := filepath.Join(dataDirGlobal, "hosts.json")
 	data, err := json.MarshalIndent(hosts, "", "  ")
 	if err != nil {
+		log.Printf("ERROR marshaling hosts: %v", err)
 		return err
 	}
-	return os.WriteFile(dataFile, data, 0644)
+	if err := os.WriteFile(dataFile, data, 0644); err != nil {
+		log.Printf("ERROR saving hosts to %s: %v", dataFile, err)
+		return err
+	}
+	return nil
 }
 
 func saveHosts(hosts []HostItem) error {
@@ -294,7 +299,10 @@ func main() {
 			if !found {
 				hosts = append(hosts, item)
 			}
-			_ = saveHosts(hosts)
+			if err := saveHosts(hosts); err != nil {
+				http.Error(w, "Failed to save host: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(item)
 
 		case http.MethodDelete:

@@ -342,15 +342,40 @@
     // Apply full-web theme variables across the whole app
     const root = document.documentElement;
     const xt = themeDef.xterm;
-    const isSlate = (themeId === 'nodedeck');
+
+    // Helper: adjust hex brightness or mix with white
+    function adjustHex(hex, percent) {
+      if (!hex || !hex.startsWith('#') || (hex.length !== 7 && hex.length !== 4)) return hex;
+      let r, g, b;
+      if (hex.length === 4) {
+        r = parseInt(hex[1] + hex[1], 16);
+        g = parseInt(hex[2] + hex[2], 16);
+        b = parseInt(hex[3] + hex[3], 16);
+      } else {
+        r = parseInt(hex.substring(1, 3), 16);
+        g = parseInt(hex.substring(3, 5), 16);
+        b = parseInt(hex.substring(5, 7), 16);
+      }
+      r = Math.min(255, Math.max(0, Math.round(r + (255 - r) * (percent / 100))));
+      g = Math.min(255, Math.max(0, Math.round(g + (255 - g) * (percent / 100))));
+      b = Math.min(255, Math.max(0, Math.round(b + (255 - b) * (percent / 100))));
+      return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+
+    const bgBase = xt.background;
+    const bgHeader = adjustHex(bgBase, 3.5);
+    const bgSidebar = adjustHex(bgBase, 2);
+    const bgCard = adjustHex(bgBase, 5.5);
+    const bgCardHover = adjustHex(bgBase, 9);
+    const bgInput = adjustHex(bgBase, 1.5);
     
     // Background tokens
-    root.style.setProperty('--bg-app', xt.background);
-    root.style.setProperty('--bg-header', isSlate ? '#0e1117' : xt.black || xt.background);
-    root.style.setProperty('--bg-sidebar', isSlate ? '#11141c' : xt.background);
-    root.style.setProperty('--bg-card', isSlate ? '#151922' : (xt.brightBlack || '#1a1f2c'));
-    root.style.setProperty('--bg-card-hover', isSlate ? '#1c2230' : (xt.selectionBackground ? xt.brightBlack : '#252c3d'));
-    root.style.setProperty('--bg-input', isSlate ? '#0a0d13' : xt.background);
+    root.style.setProperty('--bg-app', bgBase);
+    root.style.setProperty('--bg-header', bgHeader);
+    root.style.setProperty('--bg-sidebar', bgSidebar);
+    root.style.setProperty('--bg-card', bgCard);
+    root.style.setProperty('--bg-card-hover', bgCardHover);
+    root.style.setProperty('--bg-input', bgInput);
     
     // Text tokens
     root.style.setProperty('--text-main', xt.foreground || '#f1f5f9');
